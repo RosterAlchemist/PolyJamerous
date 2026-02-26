@@ -7,16 +7,13 @@ import plotly.graph_objects as go
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('artists.csv')
-        return df
-    except FileNotFoundError:
-        # Fallback if file isn't found during first run
-        st.error("Error: 'artists.csv' not found. Please ensure it is in the same directory.")
-        return pd.DataFrame()
+        return pd.read_csv('artists.csv')
+    except:
+        # Fallback for testing if CSV isn't present
+        return pd.DataFrame({'Artist':['Test'],'Aggression':[5],'Complexity':[5],'Texture':[5],'Subgenre':['Liquid']})
 
 df = load_data()
 
-# Static Color Map
 subgenre_colors = {
     'Jump-Up': '#FF4B4B', 'Dancefloor/Neuro': '#00D4FF', 'Dancefloor/Tech': '#7D4BFF',
     'Dancefloor/Rock': '#FFB400', 'Dancefloor/Pop': '#FF69B4', 'Neurofunk': '#32CD32',
@@ -36,75 +33,89 @@ def apply_jitter(group):
         group['Complexity'] = group['Complexity'].astype(float) + radius * np.sin(angles)
         group['Texture'] = group['Texture'].astype(float) + radius * np.cos(angles + 1)
     return group
+df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
 
-if not df.empty:
-    df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
+# --- 2. IMPROVED UI FLOW ---
+st.set_page_config(page_title="PolyJamerous", layout="wide", page_icon="🔊")
+st.sidebar.title("🎛️ PolyJamerous Deck")
 
-# --- 2. UI ---
-st.set_page_config(page_title="PolyJamerous Explorer", layout="wide", page_icon="🔊")
-st.sidebar.title("🎛️ PolyJamerous Settings")
-enable_grid = st.sidebar.toggle("Show Grid Lines", value=True)
-selected_artist = st.sidebar.selectbox("Focal Artist:", ["None"] + sorted(df['Artist'].tolist() if not df.empty else []))
+# Combined Control Slider for Radius
+selected_artist = st.sidebar.selectbox("Focal Artist", ["None"] + sorted(df['Artist'].tolist()))
+radius = 15.0
+if selected_artist != "None":
+    radius = st.sidebar.slider("Neighborhood Radius", 1.0, 12.0, 12.0)
+
+# Grid Toggle
+enable_grid = st.sidebar.toggle("Show Internal Grid", value=True)
 
 st.sidebar.markdown("---")
-toggle_all = st.sidebar.radio("Visibility:", ["All On", "All Off", "Manual"], horizontal=True)
+# Quick Toggle as Radio
+visibility_mode = st.sidebar.radio("Genre Selection", ["All On", "All Off", "Manual"], horizontal=True)
 
-if not df.empty:
-    all_genres = sorted(df['Subgenre'].unique())
-    selected_genres = [g for g in all_genres if st.sidebar.checkbox(g, value=(toggle_all != "All Off"))]
-    f_df = df[df['Subgenre'].isin(selected_genres)].copy()
-else:
-    f_df = pd.DataFrame()
+all_genres = sorted(df['Subgenre'].unique())
+selected_genres = []
+for g in all_genres:
+    val = True if visibility_mode == "All On" else False if visibility_mode == "All Off" else True
+    if st.sidebar.checkbox(g, value=val):
+        selected_genres.append(g)
 
-# --- 3. RENDERING ---
-st.title("🔊 PolyJamerous: The DnB 3D Soundscape")
+f_df = df[df['Subgenre'].isin(selected_genres)].copy()
+
+# --- 3. RENDERING ENGINE ---
+st.title("🔊 PolyJamerous")
 
 if f_df.empty:
-    st.info("Please select subgenres from the sidebar to populate the PolyJamerous space.")
+    st.info("The floor is empty. Select subgenres to start the jam.")
 else:
     fig = go.Figure()
 
-    # Color Logic
+    # Nearest Neighbor Logic
+    marker_color = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist()
     colorscale = None
     if selected_artist != "None":
-        target_coords = df[df['Artist'] == selected_artist][['Aggression', 'Complexity', 'Texture']].values[0].astype(float)
-        f_df['Dist'] = np.linalg.norm(f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - target_coords, axis=1)
-        # Prevent division by zero if only one artist is visible
-        max_dist = f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1
-        f_df['Prox'] = 1 - (f_df['Dist'] / max_dist)
-        marker_color = f_df['Prox']
-        colorscale = [[0, '#444444'], [1, '#00D4FF']]
-    else:
-        marker_color = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist()
+        t_coords = df[df['Artist'] == selected_artist][['Aggression', 'Complexity', 'Texture']].values[0].astype(float)
+        f_df['Dist'] = np.sqrt(np.sum((f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - t_coords)**2, axis=1))
+        f_df = f_df[f_df['Dist'] <= radius]
+        if not f_df.empty:
+            f_df['Prox'] = 1 - (f_df['Dist'] / f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1)
+            marker_color = f_df['Prox']
+            colorscale = [[0, '#444444'], [1, subgenre_colors.get(df[df['Artist']==selected_artist]['Subgenre'].iloc[0], '#00D4FF')]]
 
-    # Artist Data Trace
+    # MAIN ARTIST POINTS
     fig.add_trace(go.Scatter3d(
         x=f_df['Aggression'], y=f_df['Complexity'], z=f_df['Texture'],
         mode='markers+text', text=f_df['Artist'],
-        marker=dict(size=6, color=marker_color, colorscale=colorscale, opacity=0.8),
-        textposition="top center",
-        showlegend=False
+        marker=dict(size=5, color=marker_color, colorscale=colorscale, opacity=0.9),
+        textposition="top center", showlegend=False
     ))
 
-    # CUSTOM AXES (Intersect at 1,1,1)
-    ax_w = 8
-    fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
-    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
-    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
+    # DRAWING THE "TRUE CUBE" GRID (Manually bound to 1-10)
+    if enable_grid:
+        grid_style = dict(color="rgba(150, 150, 150, 0.15)", width=1)
+        for i in range(1, 11):
+            # X-Y Grids at Z=1
+            fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 10], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+            fig.add_trace(go.Scatter3d(x=[1, 10], y=[i, i], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+            # Y-Z Grids at X=1
+            fig.add_trace(go.Scatter3d(x=[1, 1], y=[i, i], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+            fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[i, i], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+            # X-Z Grids at Y=1
+            fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 1], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+            fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[i, i], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
 
-    # AXIS CONFIG
-    axis_config = {
-        "range": [-1, 12],
-        "showbackground": False, "showline": False, "zeroline": False,
-        "showgrid": enable_grid, "gridcolor": "rgba(150, 150, 150, 0.2)",
-        "tickmode": "array", "tickvals": list(range(1, 11)),
-        "showticklabels": True, "title": "" 
-    }
+    # MAIN AXES (The Origin Frame)
+    ax_style = dict(color='white', width=6)
+    fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
 
+    # SCENE SETTINGS
     fig.update_layout(
         template="plotly_dark", height=850, uirevision='constant',
         scene=dict(
-            xaxis=axis_config, yaxis=axis_config, zaxis=axis_config,
+            xaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, zeroline=False, showline=False, tickvals=list(range(1, 11))),
+            yaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, zeroline=False, showline=False, tickvals=list(range(1, 11))),
+            zaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, zeroline=False, showline=False, tickvals=list(range(1, 11))),
             aspectmode='cube',
             annotations=[
                 dict(showarrow=False, x=11, y=1, z=1, text="Aggression", font=dict(color="white", size=14)),
