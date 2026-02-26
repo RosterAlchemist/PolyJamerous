@@ -4,10 +4,15 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- 1. DATA LOADING ---
-@st.cache_data # This keeps the app fast by only loading once
+@st.cache_data
 def load_data():
-    df = pd.read_csv('artists.csv')
-    return df
+    try:
+        df = pd.read_csv('artists.csv')
+        return df
+    except FileNotFoundError:
+        # Fallback if file isn't found during first run
+        st.error("Error: 'artists.csv' not found. Please ensure it is in the same directory.")
+        return pd.DataFrame()
 
 df = load_data()
 
@@ -32,27 +37,30 @@ def apply_jitter(group):
         group['Texture'] = group['Texture'].astype(float) + radius * np.cos(angles + 1)
     return group
 
-df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
+if not df.empty:
+    df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
 
 # --- 2. UI ---
-st.set_page_config(page_title="DnB 1-10 Explorer", layout="wide")
-st.sidebar.title("🎛️ Settings")
+st.set_page_config(page_title="PolyJamerous Explorer", layout="wide", page_icon="🔊")
+st.sidebar.title("🎛️ PolyJamerous Settings")
 enable_grid = st.sidebar.toggle("Show Grid Lines", value=True)
-selected_artist = st.sidebar.selectbox("Focal Artist:", ["None"] + sorted(df['Artist'].tolist()))
+selected_artist = st.sidebar.selectbox("Focal Artist:", ["None"] + sorted(df['Artist'].tolist() if not df.empty else []))
 
 st.sidebar.markdown("---")
 toggle_all = st.sidebar.radio("Visibility:", ["All On", "All Off", "Manual"], horizontal=True)
 
-all_genres = sorted(df['Subgenre'].unique())
-selected_genres = [g for g in all_genres if st.sidebar.checkbox(g, value=(toggle_all != "All Off"))]
-
-f_df = df[df['Subgenre'].isin(selected_genres)].copy()
+if not df.empty:
+    all_genres = sorted(df['Subgenre'].unique())
+    selected_genres = [g for g in all_genres if st.sidebar.checkbox(g, value=(toggle_all != "All Off"))]
+    f_df = df[df['Subgenre'].isin(selected_genres)].copy()
+else:
+    f_df = pd.DataFrame()
 
 # --- 3. RENDERING ---
-st.title("🔊 DnB 3D Soundscape (1-10 Scale)")
+st.title("🔊 PolyJamerous: The DnB 3D Soundscape")
 
 if f_df.empty:
-    st.info("Select subgenres to populate the space.")
+    st.info("Please select subgenres from the sidebar to populate the PolyJamerous space.")
 else:
     fig = go.Figure()
 
@@ -61,7 +69,9 @@ else:
     if selected_artist != "None":
         target_coords = df[df['Artist'] == selected_artist][['Aggression', 'Complexity', 'Texture']].values[0].astype(float)
         f_df['Dist'] = np.linalg.norm(f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - target_coords, axis=1)
-        f_df['Prox'] = 1 - (f_df['Dist'] / f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1)
+        # Prevent division by zero if only one artist is visible
+        max_dist = f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1
+        f_df['Prox'] = 1 - (f_df['Dist'] / max_dist)
         marker_color = f_df['Prox']
         colorscale = [[0, '#444444'], [1, '#00D4FF']]
     else:
@@ -76,7 +86,7 @@ else:
         showlegend=False
     ))
 
-    # CUSTOM AXES (Thick lines from 1 to 10)
+    # CUSTOM AXES (Intersect at 1,1,1)
     ax_w = 8
     fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
