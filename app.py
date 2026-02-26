@@ -83,4 +83,33 @@ else:
     # X-Axis
     fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False))
     # Y-Axis
-    fig.add_trace(go
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False))
+    # Z-Axis
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=dict(color='white', width=ax_w), showlegend=False))
+
+    # CONFIGURE THE SCENE
+    # Symmetric Padding: Active range 1-10, View range -1 to 12
+    axis_config = dict(
+        range=[-1, 12],
+        showbackground=False,
+        showline=False,
+        zeroline=False,
+        showgrid=enable_grid,
+        gridcolor="rgba(150, 150, 150, 0.2)",
+        tickmode='array',
+        tickvals=list(range(1, 11)),
+        title=dict(font=dict(size=14, color='white'))
+    )
+
+    fig.update_layout(
+        template="plotly_dark", height=850, uirevision='constant',
+        scene=dict(
+            xaxis=dict(**axis_config, title="Aggression"),
+            yaxis=dict(**axis_config, title="Complexity"),
+            zaxis=dict(**axis_config, title="Texture"),
+            aspectmode='cube'
+        ),
+        margin=dict(l=0, r=0, b=0, t=0)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
