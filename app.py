@@ -34,52 +34,46 @@ def apply_jitter(group):
     return group
 df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
 
-# --- 2. THE POLYJAMEROUS DECK ---
+# --- 2. MULTI-GENRE SLIDER UI ---
 st.set_page_config(page_title="PolyJamerous", layout="wide", page_icon="🔊")
-
-# Custom CSS to force radio buttons to follow your brand colors
-st.markdown("""
-    <style>
-    div[role="radiogroup"] > label > div:first-child { background-color: #333 !important; }
-    div[role="radiogroup"] { color: white !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.sidebar.title("🔊 PolyJamerous")
+st.sidebar.title("🔊 PolyJamerous Deck")
 
 with st.sidebar:
     st.subheader("Focal Analysis")
     selected_artist = st.selectbox("Select Artist", ["None"] + sorted(df['Artist'].tolist()))
-    
-    radius = 15.0
-    if selected_artist != "None":
-        radius = st.sidebar.slider("Neighborhood Radius", 1.0, 12.0, 5.0)
+    radius = st.slider("Neighborhood Radius", 1.0, 12.0, 5.0) if selected_artist != "None" else 15.0
     
     st.markdown("---")
-    st.subheader("Genre Filter")
+    st.subheader("Genre Mixology")
+    st.write("Toggle sliders to include subgenres in the space.")
+    
+    # Master "Show All" Control
+    show_all = st.toggle("🌐 Master Show All", value=True)
+    
+    selected_genres = []
     all_genres = sorted(df['Subgenre'].unique())
     
-    # We create custom labels with colored emojis for the Radio Buttons
-    def get_genre_label(g):
-        if g == "Show All": return "🌐 Show All"
-        return f"● {g}"
+    for g in all_genres:
+        color = subgenre_colors.get(g, "#FFFFFF")
+        # Use colored markdown for the label
+        st.markdown(f'<span style="color:{color}; font-weight:bold;">● {g}</span>', unsafe_allow_html=True)
+        # If Master is On, sliders are forced to 1. If Off, they are manual.
+        val = st.slider(f"Active: {g}", 0, 1, 1 if show_all else 0, key=f"sl_{g}", label_visibility="collapsed")
+        if val == 1:
+            selected_genres.append(g)
 
-    selected_mode = st.radio(
-        "Isolate Subgenre:",
-        options=["Show All"] + all_genres,
-        index=0
-    )
-
-# Filter Logic
-f_df = df.copy() if selected_mode == "Show All" else df[df['Subgenre'] == selected_mode].copy()
+f_df = df[df['Subgenre'].isin(selected_genres)].copy()
 
 # --- 3. RENDERING ENGINE ---
 st.title("🔊 PolyJamerous")
 
 if f_df.empty:
-    st.info("The floor is empty. Adjust filters to start the jam.")
+    st.info("The floor is empty. Mix in some genres using the sliders.")
 else:
-    # 3D Calculation for Neighbor Highlighting
+    fig = go.Figure()
+
+    # Color & Neighbor logic
+    # Default: Map text labels to genre colors
     marker_color = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist()
     colorscale = None
     
@@ -87,51 +81,56 @@ else:
         target = df[df['Artist'] == selected_artist].iloc[0]
         t_coords = target[['Aggression', 'Complexity', 'Texture']].values.astype(float)
         f_df['Dist'] = np.sqrt(np.sum((f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - t_coords)**2, axis=1))
-        
-        # Apply the proximity-based color gradient
         f_df = f_df[f_df['Dist'] <= radius]
         if not f_df.empty:
-            max_d = f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1
-            f_df['Prox'] = 1 - (f_df['Dist'] / max_d)
+            f_df['Prox'] = 1 - (f_df['Dist'] / (f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1))
             marker_color = f_df['Prox']
-            base_color = subgenre_colors.get(target['Subgenre'], '#00D4FF')
-            colorscale = [[0, '#333333'], [1, base_color]]
-
-    fig = go.Figure()
+            colorscale = [[0, '#222222'], [1, subgenre_colors.get(target['Subgenre'], '#00D4FF')]]
 
     # MAIN ARTIST TRACE
+    # Applying the requested color logic to text labels
     fig.add_trace(go.Scatter3d(
         x=f_df['Aggression'], y=f_df['Complexity'], z=f_df['Texture'],
         mode='markers+text',
         text=f_df['Artist'],
+        textfont=dict(color=f_df['Subgenre'].map(subgenre_colors).tolist(), size=11),
         customdata=f_df['Subgenre'],
-        hovertemplate="<b>%{text}</b><br>Genre: %{customdata}<br>Aggression: %{x}<br>Complexity: %{y}<br>Texture: %{z}<extra></extra>",
+        hovertemplate="<b>%{text}</b><br>Genre: %{customdata}<extra></extra>",
         marker=dict(size=6, color=marker_color, colorscale=colorscale, opacity=0.9, line=dict(width=0)),
         textposition="top center"
     ))
 
-    # DRAW CUSTOM AXIS LINES (Exactly 1-10)
-    line_params = dict(color='white', width=8)
-    fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=line_params, hoverinfo='skip', showlegend=False))
-    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=line_params, hoverinfo='skip', showlegend=False))
-    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=line_params, hoverinfo='skip', showlegend=False))
+    # MANUAL TRUE-CUBE GRID (Bounded strictly 1-10)
+    grid_style = dict(color="rgba(150, 150, 150, 0.12)", width=1)
+    for i in range(1, 11):
+        # Grid planes only within the 1-10 frame
+        fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 10], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+        fig.add_trace(go.Scatter3d(x=[1, 10], y=[i, i], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+        fig.add_trace(go.Scatter3d(x=[1, 1], y=[i, i], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+        fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[i, i], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+        # Tick numbers drawn manually on the axes
+        fig.add_trace(go.Scatter3d(x=[i], y=[1], z=[0.8], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
+        fig.add_trace(go.Scatter3d(x=[1], y=[i], z=[0.8], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
+        fig.add_trace(go.Scatter3d(x=[0.8], y=[1], z=[i], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
 
-    # AXIS CONFIG: Ensuring ticks are centered on the 1-10 lines
-    axis_style = dict(
-        range=[-1, 12],
-        showbackground=False, showline=False, zeroline=False,
-        showgrid=True, gridcolor="rgba(100, 100, 100, 0.2)",
-        tickmode='array', tickvals=list(range(1, 11)),
-        showticklabels=True, title="",
-        tickfont=dict(color='white', size=10)
+    # AXES LINES
+    ax_style = dict(color='white', width=6)
+    fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
+
+    # SCENE CLEANUP
+    clean_axis = dict(
+        range=[-1, 12], showgrid=False, showbackground=False, 
+        zeroline=False, showline=False, showticklabels=False, title=""
     )
 
     fig.update_layout(
         template="plotly_dark", height=850, uirevision='constant',
         scene=dict(
-            xaxis=axis_style, yaxis=axis_style, zaxis=axis_style,
-            xaxis_showspikes=False, yaxis_showspikes=False, zaxis_showspikes=False,
+            xaxis=clean_axis, yaxis=clean_axis, zaxis=clean_axis,
             aspectmode='cube',
+            xaxis_showspikes=False, yaxis_showspikes=False, zaxis_showspikes=False,
             annotations=[
                 dict(showarrow=False, x=11, y=1, z=1, text="Aggression", font=dict(color="white", size=14)),
                 dict(showarrow=False, x=1, y=11, z=1, text="Complexity", font=dict(color="white", size=14)),
