@@ -9,11 +9,11 @@ def load_data():
     try:
         return pd.read_csv('artists.csv')
     except:
-        # Fallback for testing if CSV isn't present
         return pd.DataFrame({'Artist':['Test'],'Aggression':[5],'Complexity':[5],'Texture':[5],'Subgenre':['Liquid']})
 
 df = load_data()
 
+# Subgenre Color Mapping
 subgenre_colors = {
     'Jump-Up': '#FF4B4B', 'Dancefloor/Neuro': '#00D4FF', 'Dancefloor/Tech': '#7D4BFF',
     'Dancefloor/Rock': '#FFB400', 'Dancefloor/Pop': '#FF69B4', 'Neurofunk': '#32CD32',
@@ -35,29 +35,36 @@ def apply_jitter(group):
     return group
 df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
 
-# --- 2. IMPROVED UI FLOW ---
+# --- 2. THE COLOR-CODED UI ---
 st.set_page_config(page_title="PolyJamerous", layout="wide", page_icon="🔊")
-st.sidebar.title("🎛️ PolyJamerous Deck")
+st.sidebar.title("🔊 PolyJamerous")
 
-# Combined Control Slider for Radius
-selected_artist = st.sidebar.selectbox("Focal Artist", ["None"] + sorted(df['Artist'].tolist()))
-radius = 15.0
-if selected_artist != "None":
-    radius = st.sidebar.slider("Neighborhood Radius", 1.0, 12.0, 12.0)
-
-# Grid Toggle
-enable_grid = st.sidebar.toggle("Show Internal Grid", value=True)
-
-st.sidebar.markdown("---")
-# Quick Toggle as Radio
-visibility_mode = st.sidebar.radio("Genre Selection", ["All On", "All Off", "Manual"], horizontal=True)
-
-all_genres = sorted(df['Subgenre'].unique())
-selected_genres = []
-for g in all_genres:
-    val = True if visibility_mode == "All On" else False if visibility_mode == "All Off" else True
-    if st.sidebar.checkbox(g, value=val):
-        selected_genres.append(g)
+with st.sidebar:
+    st.subheader("Focal Analysis")
+    selected_artist = st.selectbox("Select Focal Artist", ["None"] + sorted(df['Artist'].tolist()))
+    radius = 15.0
+    if selected_artist != "None":
+        radius = st.slider("Neighborhood Radius", 1.0, 12.0, 12.0)
+    
+    st.markdown("---")
+    st.subheader("Subgenre Selection")
+    
+    # Selection Mode Toggle
+    visibility_mode = st.radio("Selection Mode", ["All On", "All Off", "Custom"], horizontal=True)
+    
+    all_genres = sorted(df['Subgenre'].unique())
+    selected_genres = []
+    
+    # Manual Checkboxes with Color Coding
+    for g in all_genres:
+        color = subgenre_colors.get(g, "#FFFFFF")
+        label = f":large_{'red' if 'Red' in color else 'blue'}_circle: {g}" # Basic mapping
+        # Using Markdown to show color next to checkbox
+        st.markdown(f'<span style="color:{color}; font-weight:bold;">●</span> {g}', unsafe_allow_html=True)
+        
+        default_val = True if visibility_mode == "All On" else False if visibility_mode == "All Off" else True
+        if st.checkbox(f"Show {g}", value=default_val, key=f"cb_{g}"):
+            selected_genres.append(g)
 
 f_df = df[df['Subgenre'].isin(selected_genres)].copy()
 
@@ -77,7 +84,7 @@ else:
         f_df['Dist'] = np.sqrt(np.sum((f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - t_coords)**2, axis=1))
         f_df = f_df[f_df['Dist'] <= radius]
         if not f_df.empty:
-            f_df['Prox'] = 1 - (f_df['Dist'] / f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1)
+            f_df['Prox'] = 1 - (f_df['Dist'] / (f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1))
             marker_color = f_df['Prox']
             colorscale = [[0, '#444444'], [1, subgenre_colors.get(df[df['Artist']==selected_artist]['Subgenre'].iloc[0], '#00D4FF')]]
 
@@ -89,33 +96,36 @@ else:
         textposition="top center", showlegend=False
     ))
 
-    # DRAWING THE "TRUE CUBE" GRID (Manually bound to 1-10)
-    if enable_grid:
-        grid_style = dict(color="rgba(150, 150, 150, 0.15)", width=1)
-        for i in range(1, 11):
-            # X-Y Grids at Z=1
-            fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 10], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
-            fig.add_trace(go.Scatter3d(x=[1, 10], y=[i, i], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
-            # Y-Z Grids at X=1
-            fig.add_trace(go.Scatter3d(x=[1, 1], y=[i, i], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
-            fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[i, i], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
-            # X-Z Grids at Y=1
-            fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 1], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
-            fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[i, i], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
+    # DRAWING THE AXIS NUMBERS (Moving labels to the axes)
+    for i in range(1, 11):
+        # Numbers along X-axis
+        fig.add_trace(go.Scatter3d(x=[i], y=[1], z=[0.5], mode='text', text=[str(i)], textfont=dict(color='white', size=10), showlegend=False, hoverinfo='skip'))
+        # Numbers along Y-axis
+        fig.add_trace(go.Scatter3d(x=[1], y=[i], z=[0.5], mode='text', text=[str(i)], textfont=dict(color='white', size=10), showlegend=False, hoverinfo='skip'))
+        # Numbers along Z-axis
+        fig.add_trace(go.Scatter3d(x=[0.5], y=[1], z=[i], mode='text', text=[str(i)], textfont=dict(color='white', size=10), showlegend=False, hoverinfo='skip'))
 
-    # MAIN AXES (The Origin Frame)
+    # MAIN AXES (Thick lines from 1 to 10)
     ax_style = dict(color='white', width=6)
     fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
 
-    # SCENE SETTINGS
+    # SCENE SETTINGS (Removing default X, Y, Z labels and ticks)
+    clean_axis = dict(
+        range=[-1, 12], 
+        showgrid=False, 
+        showbackground=False, 
+        zeroline=False, 
+        showline=False, 
+        showticklabels=False, # Removed the "floating" numbers at padding extremes
+        title="" # Removed the "X, Y, Z" letters
+    )
+
     fig.update_layout(
         template="plotly_dark", height=850, uirevision='constant',
         scene=dict(
-            xaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, zeroline=False, showline=False, tickvals=list(range(1, 11))),
-            yaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, zeroline=False, showline=False, tickvals=list(range(1, 11))),
-            zaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, zeroline=False, showline=False, tickvals=list(range(1, 11))),
+            xaxis=clean_axis, yaxis=clean_axis, zaxis=clean_axis,
             aspectmode='cube',
             annotations=[
                 dict(showarrow=False, x=11, y=1, z=1, text="Aggression", font=dict(color="white", size=14)),
