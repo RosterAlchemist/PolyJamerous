@@ -7,9 +7,10 @@ import plotly.graph_objects as go
 @st.cache_data
 def load_data():
     try:
+        # Assuming artists.csv is in your root directory
         return pd.read_csv('artists.csv')
     except:
-        return pd.DataFrame({'Artist':['Missing CSV'],'Aggression':[5.0],'Complexity':[5.0],'Texture':[5.0],'Subgenre':['None']})
+        return pd.DataFrame({'Artist':['Check CSV Path'],'Aggression':[5.0],'Complexity':[5.0],'Texture':[5.0],'Subgenre':['None']})
 
 df = load_data()
 
@@ -23,7 +24,7 @@ subgenre_colors = {
     'Jungle/Dancefloor': '#D2691E'
 }
 
-# Jittering Logic
+# Jittering Logic to separate overlapping artists
 def apply_jitter(group):
     if len(group) > 1:
         angles = np.linspace(0, 2*np.pi, len(group), endpoint=False)
@@ -32,11 +33,12 @@ def apply_jitter(group):
         group['Complexity'] = group['Complexity'].astype(float) + radius * np.sin(angles)
         group['Texture'] = group['Texture'].astype(float) + radius * np.cos(angles + 1)
     return group
+
 df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
 
-# --- 2. MULTI-GENRE SLIDER UI ---
+# --- 2. SIDEBAR UI (PILL TOGGLES) ---
 st.set_page_config(page_title="PolyJamerous", layout="wide", page_icon="🔊")
-st.sidebar.title("🔊 PolyJamerous Deck")
+st.sidebar.title("🔊 PolyJamerous")
 
 with st.sidebar:
     st.subheader("Focal Analysis")
@@ -45,22 +47,25 @@ with st.sidebar:
     
     st.markdown("---")
     st.subheader("Genre Mixology")
-    st.write("Toggle sliders to include subgenres in the space.")
     
-    # Master "Show All" Control
-    show_all = st.toggle("🌐 Master Show All", value=True)
+    # Global Master Toggle
+    master_on = st.toggle("🌐 Master Show All", value=True)
     
     selected_genres = []
     all_genres = sorted(df['Subgenre'].unique())
     
+    # Using columns to put the label and pill-toggle in one line
     for g in all_genres:
-        color = subgenre_colors.get(g, "#FFFFFF")
-        # Use colored markdown for the label
-        st.markdown(f'<span style="color:{color}; font-weight:bold;">● {g}</span>', unsafe_allow_html=True)
-        # If Master is On, sliders are forced to 1. If Off, they are manual.
-        val = st.slider(f"Active: {g}", 0, 1, 1 if show_all else 0, key=f"sl_{g}", label_visibility="collapsed")
-        if val == 1:
-            selected_genres.append(g)
+        col1, col2 = st.columns([3, 1])
+        g_color = subgenre_colors.get(g, "#FFFFFF")
+        
+        with col1:
+            st.markdown(f'<span style="color:{g_color}; font-weight:bold; font-size:14px;">● {g}</span>', unsafe_allow_html=True)
+        with col2:
+            # The toggle widget is the "pill" style you requested
+            is_active = st.toggle("Active", value=master_on, key=f"tog_{g}", label_visibility="collapsed")
+            if is_active:
+                selected_genres.append(g)
 
 f_df = df[df['Subgenre'].isin(selected_genres)].copy()
 
@@ -68,58 +73,61 @@ f_df = df[df['Subgenre'].isin(selected_genres)].copy()
 st.title("🔊 PolyJamerous")
 
 if f_df.empty:
-    st.info("The floor is empty. Mix in some genres using the sliders.")
+    st.info("The floor is empty. Use the toggles to mix in some genres.")
 else:
-    fig = go.Figure()
-
-    # Color & Neighbor logic
-    # Default: Map text labels to genre colors
-    marker_color = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist()
+    # Safe color mapping for filtered data
+    f_df['ColorMap'] = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF')
+    marker_color = f_df['ColorMap'].tolist()
     colorscale = None
     
+    # Neighbor Highlight Logic
     if selected_artist != "None":
         target = df[df['Artist'] == selected_artist].iloc[0]
         t_coords = target[['Aggression', 'Complexity', 'Texture']].values.astype(float)
         f_df['Dist'] = np.sqrt(np.sum((f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - t_coords)**2, axis=1))
         f_df = f_df[f_df['Dist'] <= radius]
+        
         if not f_df.empty:
-            f_df['Prox'] = 1 - (f_df['Dist'] / (f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1))
+            max_d = f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1
+            f_df['Prox'] = 1 - (f_df['Dist'] / max_d)
             marker_color = f_df['Prox']
-            colorscale = [[0, '#222222'], [1, subgenre_colors.get(target['Subgenre'], '#00D4FF')]]
+            base_color = subgenre_colors.get(target['Subgenre'], '#00D4FF')
+            colorscale = [[0, '#222222'], [1, base_color]]
+
+    fig = go.Figure()
 
     # MAIN ARTIST TRACE
-    # Applying the requested color logic to text labels
     fig.add_trace(go.Scatter3d(
         x=f_df['Aggression'], y=f_df['Complexity'], z=f_df['Texture'],
         mode='markers+text',
         text=f_df['Artist'],
-        textfont=dict(color=f_df['Subgenre'].map(subgenre_colors).tolist(), size=11),
-        customdata=f_df['Subgenre'],
-        hovertemplate="<b>%{text}</b><br>Genre: %{customdata}<extra></extra>",
+        textfont=dict(color=f_df['ColorMap'].tolist(), size=11),
         marker=dict(size=6, color=marker_color, colorscale=colorscale, opacity=0.9, line=dict(width=0)),
-        textposition="top center"
+        textposition="top center",
+        hovertemplate="<b>%{text}</b><br>Aggression: %{x}<br>Complexity: %{y}<br>Texture: %{z}<extra></extra>",
+        showlegend=False
     ))
 
-    # MANUAL TRUE-CUBE GRID (Bounded strictly 1-10)
-    grid_style = dict(color="rgba(150, 150, 150, 0.12)", width=1)
+    # MANUAL GRID & TICK MARKS
+    grid_style = dict(color="rgba(150, 150, 150, 0.15)", width=1)
     for i in range(1, 11):
-        # Grid planes only within the 1-10 frame
+        # Interior grid lines strictly inside the 1-10 frame
         fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 10], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
         fig.add_trace(go.Scatter3d(x=[1, 10], y=[i, i], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
         fig.add_trace(go.Scatter3d(x=[1, 1], y=[i, i], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
         fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[i, i], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
-        # Tick numbers drawn manually on the axes
+        # Custom Ticks on Axes
         fig.add_trace(go.Scatter3d(x=[i], y=[1], z=[0.8], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
         fig.add_trace(go.Scatter3d(x=[1], y=[i], z=[0.8], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
         fig.add_trace(go.Scatter3d(x=[0.8], y=[1], z=[i], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
 
-    # AXES LINES
+    # WHITE ORIGIN FRAME
     ax_style = dict(color='white', width=6)
     fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
 
-    # SCENE CLEANUP
+    # STAGE CONFIGURATION
     clean_axis = dict(
         range=[-1, 12], showgrid=False, showbackground=False, 
         zeroline=False, showline=False, showticklabels=False, title=""
