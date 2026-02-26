@@ -25,7 +25,6 @@ data = {
 }
 df = pd.DataFrame(data)
 
-# Pre-defined Subgenre Color Map
 subgenre_colors = {
     'Jump-Up': '#FF4B4B', 'Dancefloor/Neuro': '#00D4FF', 'Dancefloor/Tech': '#7D4BFF',
     'Dancefloor/Rock': '#FFB400', 'Dancefloor/Pop': '#FF69B4', 'Neurofunk': '#32CD32',
@@ -35,7 +34,7 @@ subgenre_colors = {
     'Experimental/Tech': '#ADFF2F', 'Liquid/Dark': '#483D8B', 'Dancefloor/Minimal': '#708090'
 }
 
-# Jittering
+# Jittering Logic
 def apply_jitter(group):
     if len(group) > 1:
         angles = np.linspace(0, 2*np.pi, len(group), endpoint=False)
@@ -46,7 +45,7 @@ def apply_jitter(group):
     return group
 df = df.groupby(['Aggression', 'Complexity', 'Texture'], group_keys=False).apply(apply_jitter)
 
-# --- 2. STREAMLIT UI ---
+# --- 2. UI ---
 st.set_page_config(page_title="DnB 1-10 Explorer", layout="wide")
 st.sidebar.title("🎛️ Settings")
 enable_grid = st.sidebar.toggle("Show Grid Lines", value=True)
@@ -58,7 +57,7 @@ selected_genres = [g for g in sorted(df['Subgenre'].unique()) if st.sidebar.chec
 
 f_df = df[df['Subgenre'].isin(selected_genres)].copy()
 
-# --- 3. GRAPH ENGINE ---
+# --- 3. RENDERING ---
 st.title("🔊 DnB 3D Soundscape (1-10 Scale)")
 
 if f_df.empty:
@@ -66,56 +65,51 @@ if f_df.empty:
 else:
     fig = go.Figure()
 
-    # --- THE COLOR FIX ---
+    # Color Handling
     colorscale = None
     if selected_artist != "None":
-        # Neighbor Highlight Mode: Numeric Proximity
         target_coords = df[df['Artist'] == selected_artist][['Aggression', 'Complexity', 'Texture']].values[0].astype(float)
         f_df['Dist'] = np.linalg.norm(f_df[['Aggression', 'Complexity', 'Texture']].values.astype(float) - target_coords, axis=1)
         f_df['Prox'] = 1 - (f_df['Dist'] / f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1)
         marker_color = f_df['Prox']
         colorscale = [[0, '#444444'], [1, '#00D4FF']]
     else:
-        # Standard Mode: Map Subgenre Strings to Hex Colors manually
         marker_color = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist()
 
-    # Add Artists Trace
+    # Artist Trace
     fig.add_trace(go.Scatter3d(
         x=f_df['Aggression'], y=f_df['Complexity'], z=f_df['Texture'],
-        mode='markers+text', 
-        text=f_df['Artist'],
-        marker=dict(
-            size=6, 
-            color=marker_color, 
-            colorscale=colorscale, 
-            opacity=0.8,
-            line=dict(width=0)
-        ),
+        mode='markers+text', text=f_df['Artist'],
+        marker=dict(size=6, color=marker_color, colorscale=colorscale, opacity=0.8),
         textposition="top center"
     ))
 
-    # DRAW CUSTOM AXES (Intersect at 1,1,1)
+    # CUSTOM AXES (Thick lines from 1 to 10)
     ax_w = 8
-    # X, Y, Z lines from 1 to 10
-    fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='none'))
-    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='none'))
-    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='none'))
+    fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=dict(color='white', width=ax_w), showlegend=False, hoverinfo='skip'))
 
-    # AXIS CONFIG
-    axis_config = dict(
-        range=[-1, 12],
-        showbackground=False, showline=False, zeroline=False,
-        showgrid=enable_grid, gridcolor="rgba(150, 150, 150, 0.2)",
-        tickmode='array', tickvals=list(range(1, 11)),
-        title=dict(font=dict(size=14, color='white'))
-    )
+    # AXIS CONFIG (Dictionary defined to avoid TypeError)
+    # Range set to -1 to 12 for symmetric padding
+    axis_config = {
+        "range": [-1, 12],
+        "showbackground": False,
+        "showline": False,
+        "zeroline": False,
+        "showgrid": enable_grid,
+        "gridcolor": "rgba(150, 150, 150, 0.2)",
+        "tickmode": "array",
+        "tickvals": list(range(1, 11)),
+        "showticklabels": True
+    }
 
     fig.update_layout(
         template="plotly_dark", height=850, uirevision='constant',
         scene=dict(
-            xaxis=dict(**axis_config, title="Aggression"),
-            yaxis=dict(**axis_config, title="Complexity"),
-            zaxis=dict(**axis_config, title="Texture"),
+            xaxis=dict(**axis_config, title=dict(text="Aggression", font=dict(size=14))),
+            yaxis=dict(**axis_config, title=dict(text="Complexity", font=dict(size=14))),
+            zaxis=dict(**axis_config, title=dict(text="Texture", font=dict(size=14))),
             aspectmode='cube'
         ),
         margin=dict(l=0, r=0, b=0, t=0)
