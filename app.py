@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from sklearn.cluster import KMeans
 
 # --- 1. DATA LOADING ---
 _ARTIST_RENAME = {
@@ -144,12 +145,33 @@ if mode == 'explore':
         st.subheader("Subgenres")
         st.caption("Subgenre filtering coming soon.")
 
+        st.markdown("---")
+        st.subheader("Display Options")
+        show_labels = st.checkbox("Show Artist Labels", value=True)
+
+        st.markdown("---")
+        st.subheader("Clustering")
+        enable_clustering = st.checkbox("Enable K-Means Clustering", value=False)
+        if enable_clustering:
+            n_clusters = st.slider("Number of Clusters", 2, 15, 5)
+            cluster_strategy = st.radio("Strategy", ["Aggregate", "Scatter"], label_visibility="collapsed")
+        else:
+            n_clusters = None
+            cluster_strategy = None
+
     ax_col1, ax_col2, ax_col3 = st.columns(3)
     with ax_col1: axis_x = st.selectbox("X-Axis", DIMENSIONS, index=1)
     with ax_col2: axis_y = st.selectbox("Y-Axis", DIMENSIONS, index=7)
     with ax_col3: axis_z = st.selectbox("Z-Axis", DIMENSIONS, index=0)
 
     f_df = df[df['genre'] == parent_genre].copy()
+
+    # Prepare for clustering if enabled
+    if enable_clustering and n_clusters is not None:
+        X = f_df[[axis_x, axis_y, axis_z]].values
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        f_df['_cluster_id'] = kmeans.fit_predict(X)
+        f_df['_cluster_center'] = False
 
     if not f_df.empty:
         DIM_SHORT = [
@@ -193,6 +215,16 @@ if mode == 'explore':
         f_df = f_df.copy()
         f_df['_color'] = f_df.apply(axis_color, axis=1)
 
+        # Define cluster colors for visualization
+        if enable_clustering and cluster_strategy == 'Scatter':
+            # Plotly qualitative palette colors
+            CLUSTER_COLORS = [
+                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'
+            ]
+            f_df['_cluster_color'] = f_df['_cluster_id'].apply(lambda x: CLUSTER_COLORS[x % len(CLUSTER_COLORS)])
+
         fig = go.Figure()
 
         pos_cols = [axis_x, axis_y, axis_z]
@@ -203,12 +235,17 @@ if mode == 'explore':
         # Background single points
         others = singles_df[singles_df['Artist'] != selected_artist] if selected_artist != "None" else singles_df
         if not others.empty:
+            # Determine colors based on clustering strategy
+            use_cluster_colors = enable_clustering and cluster_strategy == 'Scatter'
+            point_colors = others['_cluster_color'].tolist() if use_cluster_colors else others['_color'].tolist()
+            text_colors = point_colors if use_cluster_colors else others['_color'].tolist()
+
             fig.add_trace(go.Scatter3d(
                 x=others[axis_x], y=others[axis_y], z=others[axis_z],
-                mode='markers+text',
-                text=others['Artist'],
-                marker=dict(size=7, symbol='circle', color=others['_color'].tolist(), opacity=0.85),
-                textfont=dict(color=others['_color'].tolist(), size=11),
+                mode='markers+text' if show_labels else 'markers',
+                text=others['Artist'] if show_labels else "",
+                marker=dict(size=7, symbol='circle', color=point_colors, opacity=0.85),
+                textfont=dict(color=text_colors, size=11),
                 textposition="top center",
                 hovertemplate=[build_hover(r) for _, r in others.iterrows()],
                 showlegend=False
@@ -217,11 +254,12 @@ if mode == 'explore':
         # Focused single artist
         if selected_artist != "None" and selected_artist in singles_df['Artist'].values:
             fa = singles_df[singles_df['Artist'] == selected_artist].iloc[[0]]
-            fa_color = fa['_color'].iloc[0]
+            use_cluster_colors = enable_clustering and cluster_strategy == 'Scatter'
+            fa_color = fa['_cluster_color'].iloc[0] if use_cluster_colors else fa['_color'].iloc[0]
             fig.add_trace(go.Scatter3d(
                 x=fa[axis_x], y=fa[axis_y], z=fa[axis_z],
-                mode='markers+text',
-                text=fa['Artist'],
+                mode='markers+text' if show_labels else 'markers',
+                text=fa['Artist'] if show_labels else "",
                 marker=dict(size=14, symbol='circle', color=fa_color, opacity=1.0,
                             line=dict(color='white', width=3)),
                 textfont=dict(color='white', size=14),
@@ -236,8 +274,8 @@ if mode == 'explore':
             is_focused = selected_artist != "None" and selected_artist in group['Artist'].values
             fig.add_trace(go.Scatter3d(
                 x=[group[axis_x].iloc[0]], y=[group[axis_y].iloc[0]], z=[group[axis_z].iloc[0]],
-                mode='markers+text',
-                text=[names],
+                mode='markers+text' if show_labels else 'markers',
+                text=[names] if show_labels else [""],
                 marker=dict(
                     size=15 if is_focused else 12,
                     symbol='diamond',
