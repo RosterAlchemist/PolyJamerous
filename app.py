@@ -298,7 +298,7 @@ if mode == 'explore':
         )
 
         event = st.plotly_chart(fig, on_select="rerun", selection_mode=["points"],
-                                key="scatter3d", use_container_width=True)
+                                key="scatter3d", width='stretch')
 
         # Click on a single artist dot → switch to Compare with them in slot 1
         if event.selection.points:
@@ -361,7 +361,7 @@ elif mode == 'compare':
             height=520,
             margin=dict(l=60, r=60, t=40, b=40),
         )
-        st.plotly_chart(fig_radar, use_container_width=True)
+        st.plotly_chart(fig_radar, width='stretch')
 
         # --- ARTIST DETAIL PANELS ---
         detail_cols = st.columns(len(active_names))
