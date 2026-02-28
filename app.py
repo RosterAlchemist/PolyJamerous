@@ -66,11 +66,11 @@ st.title("🔊 PolyJamerous")
 # --- 3. SIDEBAR ---
 with st.sidebar:
     st.subheader("Genre Focus")
-    parent_genre = st.radio("", options=GENRES, index=2)
+    parent_genre = st.radio("Genre", options=GENRES, index=2, label_visibility="collapsed")
 
     st.markdown("---")
     st.subheader("Focus Artist")
-    selected_artist = st.selectbox("", ["None"] + sorted(df['Artist'].tolist()))
+    selected_artist = st.selectbox("Artist", ["None"] + sorted(df['Artist'].tolist()), label_visibility="collapsed")
 
     st.markdown("---")
     st.subheader("Subgenres")
@@ -86,29 +86,29 @@ with ax_col3: axis_z = st.selectbox("Z-Axis", DIMENSIONS, index=5)
 f_df = df[df['genre'] == parent_genre].copy()
 
 # --- 5. HELPERS ---
-def _wrap(text, width=58):
-    """Wrap each line of text to a fixed character width."""
-    return '\n'.join(textwrap.fill(line, width) for line in str(text).split('\n'))
+def _wrap(text, width=55):
+    """Wrap text to a fixed width using HTML line breaks for Plotly hovertext."""
+    return textwrap.fill(str(text), width).replace('\n', '<br>')
 
 def get_axis_popover(dim_name, genre):
-    """Plain-text popover for 3D axis labels (hovertext does not render HTML)."""
-    parts = [dim_name]
+    """HTML popover for 3D axis label hovertext."""
+    parts = [f"<b>{dim_name}</b>"]
     try:
         u = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == 'Universal')].iloc[0]
         parts.append(_wrap(u['Description']))
-        parts.append("Metrics: " + _wrap(u['Metrics']))
+        parts.append("<i>Metrics: " + _wrap(u['Metrics']) + "</i>")
     except (IndexError, KeyError):
         pass
     try:
         g = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == genre)].iloc[0]
         parts.append(
-            f"High (10): {g['High-End Anchor']}\n"
-            f"Mid  (5):  {g['Mid-Point Anchor']}\n"
+            f"High (10): {g['High-End Anchor']}<br>"
+            f"Mid  (5):  {g['Mid-Point Anchor']}<br>"
             f"Low  (1):  {g['Low-End Anchor']}"
         )
     except (IndexError, KeyError):
         parts.append("Genre anchors pending.")
-    return "\n\n".join(parts)
+    return "<br><br>".join(parts)
 
 # --- 6. VISUALIZATION ---
 if not f_df.empty:
@@ -196,4 +196,4 @@ if not f_df.empty:
         margin=dict(l=0, r=0, b=0, t=0)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
