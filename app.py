@@ -109,7 +109,7 @@ for _i in range(4):
 st.title("🔊 PolyJamerous")
 mode = st.session_state['mode']
 
-mc1, mc2, _ = st.columns([1.2, 1.8, 5])
+mc1, mc2 = st.columns(2)
 with mc1:
     if st.button("🌐 Soundscape", use_container_width=True,
                  type="primary" if mode == 'explore' else "secondary"):
