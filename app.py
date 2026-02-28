@@ -112,11 +112,25 @@ def get_axis_popover(dim_name, genre):
 
 # --- 6. VISUALIZATION ---
 if not f_df.empty:
+    DIM_SHORT = [
+        ("Arousal",    "Arousal"),    ("Valence",             "Valence"),
+        ("Timbral Brightness",  "Brightness"),  ("Rhythmic Regularity", "Rhythm"),
+        ("Harmonic Complexity", "Harmony"),     ("Spatial Dimension",   "Spatial"),
+        ("Articulation",        "Articulation"),("Melodic Salience",    "Melody"),
+        ("Structural Entropy",  "Entropy"),     ("Acousticness",        "Acoustic"),
+    ]
+
     def build_hover(row):
-        txt = f"<b>{row['Artist']}</b><br><i>{row['DNA']}</i><br><br>"
-        for d in DIMENSIONS:
-            txt += f"<b>{d}:</b> {row[d]}<br>"
-        return txt + "<extra></extra>"
+        score_lines = "<br>".join(
+            f"{short:<13} {row[full]:>2}    {DIM_SHORT[i+1][1]:<13} {row[DIM_SHORT[i+1][0]]:>2}"
+            for i, (full, short) in enumerate(DIM_SHORT) if i % 2 == 0
+        )
+        return (
+            f"<b>{row['Artist']}</b><br>"
+            f"<i>{_wrap(row['DNA'], width=45)}</i><br><br>"
+            f"{score_lines}"
+            "<extra></extra>"
+        )
 
     fig = go.Figure()
 
@@ -183,6 +197,7 @@ if not f_df.empty:
     fig.update_layout(
         template="plotly_dark", height=800,
         paper_bgcolor='rgba(0,0,0,0)',
+        hoverlabel=dict(font=dict(family="monospace", size=12)),
         scene=dict(
             xaxis=_axis, yaxis=_axis, zaxis=_axis,
             aspectmode='cube',
