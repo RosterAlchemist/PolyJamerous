@@ -3,26 +3,17 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# --- 1. DATA LOADING & CONSTANTS ---
+# --- 1. DATA LOADING ---
 @st.cache_data
 def load_data():
     artists = pd.read_csv('artists.csv')
-    # Using the new version with genre columns
     anchors = pd.read_csv('dimension_anchors_v2.csv')
     return artists, anchors
 
 df, anchors_df = load_data()
 
-DIMENSIONS = [
-    "Arousal", "Valence", "Timbral Brightness", "Rhythmic Regularity",
-    "Harmonic Complexity", "Spatial Dimension", "Articulation",
-    "Melodic Salience", "Structural Entropy", "Acousticness"
-]
-
-GENRES = [
-    "Bass + Dubstep", "Breakbeat", "Drum & Bass + Jungle", "ElectroPop + SynthPop",
-    "Hard Dance", "House", "IDM", "Noise", "Synthwave + Vaporwave", "Techno", "Trance"
-]
+DIMENSIONS = ["Arousal", "Valence", "Timbral Brightness", "Rhythmic Regularity", "Harmonic Complexity", "Spatial Dimension", "Articulation", "Melodic Salience", "Structural Entropy", "Acousticness"]
+GENRES = ["Bass + Dubstep", "Breakbeat", "Drum & Bass + Jungle", "ElectroPop + SynthPop", "Hard Dance", "House", "IDM", "Noise", "Synthwave + Vaporwave", "Techno", "Trance"]
 
 subgenre_colors = {
     'Jump-Up': '#FF4B4B', 'Dancefloor/Neuro': '#00D4FF', 'Dancefloor/Tech': '#7D4BFF',
@@ -34,24 +25,9 @@ subgenre_colors = {
     'Jungle/Dancefloor': '#D2691E'
 }
 
-def apply_jitter(group, dims):
-    if len(group) > 1:
-        angles = np.linspace(0, 2*np.pi, len(group), endpoint=False)
-        radius = 0.28
-        for i, dim in enumerate(dims):
-            group[dim] = group[dim].astype(float) + radius * (np.cos(angles) if i % 2 == 0 else np.sin(angles))
-    return group
-
-# --- 2. HEADER & GENRE SELECTOR ---
+# --- 2. UI HEADER ---
 st.title("🔊 PolyJamerous")
-
-# Top-level Genre Selector
-parent_genre = st.radio(
-    "Select Parent Genre Focus",
-    options=GENRES,
-    index=GENRES.index("Drum & Bass + Jungle"),
-    horizontal=True
-)
+parent_genre = st.radio("Select Parent Genre Focus", options=GENRES, index=2, horizontal=True)
 
 # --- 3. SIDEBAR CONTROLS ---
 with st.sidebar:
@@ -67,68 +43,57 @@ with st.sidebar:
     
     st.markdown("---")
     st.subheader("Subgenre Mixology")
-    selected_subgenres = []
-    # Currently filtering subgenres based on the dataset (assuming DnB for this prototype)
-    all_subs = sorted(df['Subgenre'].unique())
-    for s in all_subs:
+    selected_subs = []
+    for s in sorted(df['Subgenre'].unique()):
         col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f'<span style="color:{subgenre_colors.get(s, "#EEE")}; font-weight:bold;">● {s}</span>', unsafe_allow_html=True)
-        with col2:
-            if st.toggle("Active", value=True, key=f"tog_{s}", label_visibility="collapsed"):
-                selected_subgenres.append(s)
+        with col1: st.markdown(f'<span style="color:{subgenre_colors.get(s, "#EEE")}; font-weight:bold;">● {s}</span>', unsafe_allow_html=True)
+        with col2: 
+            if st.toggle("Active", value=True, key=f"t_{s}"): selected_subs.append(s)
 
 # --- 4. DATA PROCESSING ---
-active_dims = [axis_x, axis_y, axis_z]
-current_df = df.groupby(active_dims, group_keys=False).apply(lambda x: apply_jitter(x, active_dims))
-f_df = current_df[current_df['Subgenre'].isin(selected_subgenres)].copy()
+f_df = df[df['Subgenre'].isin(selected_subs)].copy()
 
-def get_anchor_label(dim_name, current_genre):
+# Enhanced Helper for Axis Popovers
+def get_axis_popover(dim_name, genre):
     try:
-        # Filter anchors by the selected parent genre
-        row = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == current_genre)].iloc[0]
-        return f"<b>{dim_name}</b><br><span style='font-size:10px; color:#AAA;'>High: {row['High-End Anchor']}<br>Low: {row['Low-End Anchor']}</span>"
+        row = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == genre)].iloc[0]
+        # Combining Description with Anchors for a rich mouse-over
+        info = f"<b>{dim_name}</b><br><i>{row['Description']}</i><br><br>"
+        info += f"High (10): {row['High-End Anchor']}<br>"
+        info += f"Mid (5): {row['Mid-Point Anchor']}<br>"
+        info += f"Low (1): {row['Low-End Anchor']}"
+        return info
     except:
-        # Fallback if genre isn't in anchor file yet
-        return f"<b>{dim_name}</b>"
+        return f"<b>{dim_name}</b><br>Description pending for this genre."
 
 # --- 5. VISUALIZATION ---
-if f_df.empty:
-    st.warning("No artists match the current subgenre selection.")
-else:
-    f_df['ColorMap'] = f_df['Subgenre'].map(subgenre_colors).fillna('#FFFFFF')
-    marker_color = f_df['ColorMap'].tolist()
-    colorscale = None
-    
-    if selected_artist != "None":
-        target = df[df['Artist'] == selected_artist].iloc[0]
-        t_coords = target[active_dims].values.astype(float)
-        f_df['Dist'] = np.sqrt(np.sum((f_df[active_dims].values.astype(float) - t_coords)**2, axis=1))
-        f_df = f_df[f_df['Dist'] <= radius]
-        if not f_df.empty:
-            max_d = f_df['Dist'].max() if f_df['Dist'].max() > 0 else 1
-            marker_color = 1 - (f_df['Dist'] / max_d)
-            base_color = subgenre_colors.get(target['Subgenre'], '#00D4FF')
-            colorscale = [[0, '#222222'], [1, base_color]]
+if not f_df.empty:
+    hover_texts = []
+    for _, row in f_df.iterrows():
+        # Artist Narrative + Full Dimension Rankings
+        txt = f"<b>{row['Artist']}</b><br><i>{row['DNA']}</i><br><br>"
+        for d in DIMENSIONS:
+            txt += f"<b>{d}:</b> {row[d]}<br>"
+        txt += "<extra></extra>"
+        hover_texts.append(txt)
 
     fig = go.Figure()
 
-    # Artist Data Points
+    # Spherical Artist Points
     fig.add_trace(go.Scatter3d(
         x=f_df[axis_x], y=f_df[axis_y], z=f_df[axis_z],
         mode='markers+text',
         text=f_df['Artist'],
-        textfont=dict(color=f_df['ColorMap'].tolist(), size=11),
-        marker=dict(size=6, color=marker_color, colorscale=colorscale, opacity=0.9),
+        marker=dict(size=7, symbol='circle', color=f_df['Subgenre'].map(subgenre_colors).fillna('#FFF'), opacity=0.9),
+        textfont=dict(color=f_df['Subgenre'].map(subgenre_colors).tolist(), size=11),
         textposition="top center",
-        hovertemplate="<b>%{text}</b><br>DNA: %{customdata}<extra></extra>",
-        customdata=f_df['DNA']
+        hovertemplate=hover_texts,
+        showlegend=False
     ))
 
-    # Grid & Frame (Logic from previous versions)
-    grid_style = dict(color="rgba(150, 150, 150, 0.12)", width=1)
+    # Grid & Axes Frame (Logic from previous versions)
+    grid_style = dict(color="rgba(150, 150, 150, 0.1)", width=1)
     for i in range(1, 11):
-        # Interior Grids
         fig.add_trace(go.Scatter3d(x=[i, i], y=[1, 10], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
         fig.add_trace(go.Scatter3d(x=[1, 10], y=[i, i], z=[1, 1], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
         fig.add_trace(go.Scatter3d(x=[1, 1], y=[i, i], z=[1, 10], mode='lines', line=grid_style, hoverinfo='skip', showlegend=False))
@@ -140,27 +105,26 @@ else:
         fig.add_trace(go.Scatter3d(x=[1], y=[i], z=[0.8], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
         fig.add_trace(go.Scatter3d(x=[0.8], y=[1], z=[i], mode='text', text=[str(i)], textfont=dict(color='white', size=9), showlegend=False, hoverinfo='skip'))
 
-    # Origin Frame
+    # White Origin Axes
     ax_style = dict(color='white', width=6)
     fig.add_trace(go.Scatter3d(x=[1, 10], y=[1, 1], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 10], z=[1, 1], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter3d(x=[1, 1], y=[1, 1], z=[1, 10], mode='lines', line=ax_style, hoverinfo='skip', showlegend=False))
 
     fig.update_layout(
-        template="plotly_dark", height=850, uirevision='constant',
+        template="plotly_dark", height=850,
         scene=dict(
-            xaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, showticklabels=False, title=""),
-            yaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, showticklabels=False, title=""),
-            zaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, showticklabels=False, title=""),
+            xaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, showticklabels=False, title="", showspikes=False),
+            yaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, showticklabels=False, title="", showspikes=False),
+            zaxis=dict(range=[-1, 12], showgrid=False, showbackground=False, showticklabels=False, title="", showspikes=False),
             aspectmode='cube',
             annotations=[
-                dict(showarrow=False, x=11, y=1, z=1, text=get_anchor_label(axis_x, parent_genre), font=dict(color="white")),
-                dict(showarrow=False, x=1, y=11, z=1, text=get_anchor_label(axis_y, parent_genre), font=dict(color="white")),
-                dict(showarrow=False, x=1, y=1, z=11, text=get_anchor_label(axis_z, parent_genre), font=dict(color="white"))
+                dict(showarrow=False, x=11, y=1, z=1, text=f"<b>{axis_x}</b>", font=dict(color="white"), hovertext=get_axis_popover(axis_x, parent_genre)),
+                dict(showarrow=False, x=1, y=11, z=1, text=f"<b>{axis_y}</b>", font=dict(color="white"), hovertext=get_axis_popover(axis_y, parent_genre)),
+                dict(showarrow=False, x=1, y=1, z=11, text=f"<b>{axis_z}</b>", font=dict(color="white"), hovertext=get_axis_popover(axis_z, parent_genre))
             ]
         ),
-        margin=dict(l=0, r=0, b=0, t=0),
-        showlegend=False
+        margin=dict(l=0, r=0, b=0, t=0)
     )
 
     st.plotly_chart(fig, use_container_width=True)

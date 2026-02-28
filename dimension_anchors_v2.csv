@@ -1,11 +1,11 @@
-Dimension,Description,Genre,Low-End Anchor,Mid-Point Anchor,High-End Anchor
-Arousal,"Physiological impact. High: Fast, loud, intense. Low: Slow, soft, relaxing.",Drum & Bass + Jungle,Phaeleh,Chase & Status,A.M.C
-Valence,"Emotional polarity. High: Happy, triumphant. Low: Sad, ominous, dark.",Drum & Bass + Jungle,Noisia,Pendulum,Netsky
-Timbral Brightness,"Sharpness/Clarity. High: Piercing, high-frequency focus. Low: Warm, muffled.",Drum & Bass + Jungle,Calibre,Sub Focus,Mefjus
-Rhythmic Regularity,"Predictability. High: Steady pulse/4-on-the-floor. Low: Syncopated, erratic.",Drum & Bass + Jungle,Goldie,Alix Perez,Sub Focus
-Harmonic Complexity,"Musical density. High: Many chords, jazz/classical. Low: 3-chord punk/minimal.",Drum & Bass + Jungle,Basstripper,Wilkinson,TeeBee
-Spatial Dimension,"Atmosphere. High: Massive reverb, wide stereo. Low: Dry, intimate, mono.",Drum & Bass + Jungle,Bou,Metrik,Phaeleh
-Articulation,"Note shape. High: Staccato, plucked, aggressive. Low: Legato, flowing, soft.",Drum & Bass + Jungle,Hybrid Minds,Culture Shock,Basstripper
-Melodic Salience,"Narrative focus. High: Singable 'hooks'. Low: Texture-based, no melody.",Drum & Bass + Jungle,A.M.C,Calibre,Wilkinson
-Structural Entropy,"Evolution. High: Progressive journey, ever-changing. Low: Loop-based, hypnotic.",Drum & Bass + Jungle,Sigma,Bensley,Camo & Krooked
-Acousticness,"Source origin. High: Natural, human, organic. Low: Synthetic, mechanical, digital.",Drum & Bass + Jungle,Noisia,Justin Hawkes,Rudimental
+Dimension,Genre,Low-End Anchor,Mid-Point Anchor,High-End Anchor
+Arousal,Drum & Bass + Jungle,Phaeleh,Chase & Status,A.M.C
+Valence,Drum & Bass + Jungle,Noisia,Pendulum,Netsky
+Timbral Brightness,Drum & Bass + Jungle,Calibre,Sub Focus,Mefjus
+Rhythmic Regularity,Drum & Bass + Jungle,Goldie,Alix Perez,Sub Focus
+Harmonic Complexity,Drum & Bass + Jungle,Basstripper,Wilkinson,TeeBee
+Spatial Dimension,Drum & Bass + Jungle,Bou,Metrik,Phaeleh
+Articulation,Drum & Bass + Jungle,Hybrid Minds,Culture Shock,Basstripper
+Melodic Salience,Drum & Bass + Jungle,A.M.C,Calibre,Wilkinson
+Structural Entropy,Drum & Bass + Jungle,Sigma,Bensley,Camo & Krooked
+Acousticness,Drum & Bass + Jungle,Noisia,Justin Hawkes,Rudimental

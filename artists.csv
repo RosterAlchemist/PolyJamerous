@@ -1,32 +1,32 @@
 Artist,Arousal,Valence,Timbral Brightness,Rhythmic Regularity,Harmonic Complexity,Spatial Dimension,Articulation,Melodic Salience,Structural Entropy,Acousticness,DNA,Subgenre
-Basstripper,9,6,8,9,2,4,9,3,4,2,"High-energy jump-up characterized by minimalist, 'wonky' synth leads and heavy rhythmic impact.",Jump-Up
-MUZZ,9,5,8,8,7,7,8,6,8,3,"Cinematic and orchestral influence fused with industrial, high-arousal neurofunk textures.",Dancefloor/Neuro
-Grafix,8,7,9,8,6,6,8,7,7,2,"Sleek, tech-infused dancefloor energy with polished production and melodic rock undertones.",Dancefloor/Tech
-Pendulum,9,6,7,9,6,8,7,8,8,4,"Groundbreaking rock-electronic fusion; massive spatial depth and aggressive, guitar-led energy.",Dancefloor/Rock
-Sigma,6,8,6,9,5,7,6,9,5,4,"Radio-ready melodic dancefloor; high accessibility with bright, uplifting vocal-driven arrangements.",Dancefloor/Pop
-TeeBee,8,4,9,6,9,8,7,4,9,3,"Surgical neurofunk pioneer; cold, metallic timbres and hyper-precise rhythmic articulation.",Neurofunk
-Sub Focus,7,7,8,9,6,7,7,8,6,3,The pinnacle of dancefloor versatility; shimmering textures and high melodic salience with house influences.,Dancefloor
-Kumarion,9,4,8,8,3,5,9,4,5,2,"Gritty, low-frequency focus blending heavy trap aesthetics with high-impact rhythmic drive.",Heavy/Trap
-Feint,6,7,7,8,6,6,7,8,6,3,"Fast-paced melodic liquid; energetic, 'gaming' style with high arousal and bright timbral clarity.",Melodic/Liquid
-Rudimental,4,8,5,7,7,8,5,9,7,7,"Organic, soul-infused liquid; high acousticness featuring live brass and authentic human rhythm.",Liquid/Soul
-Justin Hawkes,5,5,6,7,7,7,7,6,8,5,Experimental fusion blending Americana and rock textures with a high-entropy structural approach.,Experimental
-Goldie,4,4,7,5,8,9,5,3,9,4,"The architect of jungle; complex, high-entropy breakbeats and deep, atmospheric spatial depth.",Jungle
-Hybrid Minds,3,7,4,9,6,8,4,8,5,5,"Ethereal, soul-touching liquid; high valence and emotional depth with rolling, organic percussion.",Liquid
-Phaeleh,2,6,3,7,7,10,3,6,7,6,"Minimalist ambient-garage crossover; vast spatial dimensions and low-arousal, meditative textures.",Ambient/Garage
-Noisia,10,3,10,6,9,9,9,2,10,1,"Technical titans; maximum harmonic complexity and distorted, hyper-engineered sound design.",Neurofunk
-Metrik,8,7,9,9,7,7,8,8,7,2,"High-gloss thumping dancefloor; synthetic, punchy articulation designed for massive festival spaces.",Dancefloor
-Alix Perez,3,5,5,7,8,8,5,5,8,6,"Deep, minimalist soul; intricate rhythmic regularity and low-brightness, moody atmospheres.",Deep/Liquid
-Netsky,5,8,7,9,5,7,6,9,5,3,"Uplifting, high-valence pop-liquid; characterized by catchy melodies and bright, happy tonality.",Liquid/Pop
-Chase & Status,7,5,7,8,6,6,7,6,7,5,"Cultural bridge-builders; raw jungle energy mixed with high-arousal, mainstream dance appeal.",Jungle/Dancefloor
-Bou,9,5,8,9,3,4,9,3,4,2,"Minimalist 'roller' specialist; raw, aggressive jump-up with simple but effective rhythmic drive.",Jump-Up
-Dimension,7,7,8,9,5,7,7,8,6,3,"Sleek, neon-lit cinematic dancefloor; incredibly consistent production with high timbral brightness.",Dancefloor
-A.M.C,10,4,9,8,7,6,9,2,8,1,The king of energy; unrelenting arousal and technical rhythmic speed with high articulation.,Neurofunk
-Hedex,9,5,9,9,3,5,9,3,4,2,"Raw, aggressive 'screamer' jump-up; high-frequency synth focus and high-arousal club energy.",Jump-Up
-Calibre,2,7,4,8,8,7,4,6,7,6,"The master of subtlety; organic, high-valence deep liquid with unparalleled rhythmic flow.",Deep/Liquid
-Bensley,6,5,8,7,8,8,7,7,9,3,"High-tech experimentalist; smooth, polished textures and complex, genre-bending structures.",Experimental/Tech
-S.P.Y,6,4,6,8,6,7,6,5,6,4,"Dark, atmospheric deep liquid; high spatial dimension with a gritty, low-valence foundation.",Liquid/Dark
-Kanine,8,6,8,9,5,6,8,6,6,2,Modern powerhouse; heavy synthetic textures and aggressive dancefloor-focused arousal.,Dancefloor
-Wilkinson,6,8,7,9,5,7,6,9,5,4,"Euphoric anthem-maker; high melodic salience and bright, radio-friendly production.",Dancefloor/Pop
-Camo & Krooked,8,6,9,7,9,8,8,7,10,2,"Avant-garde minimalists; hyper-complex structures and surgical, high-entropy sound design.",Dancefloor/Minimal
-Mefjus,10,3,10,6,9,9,9,2,10,1,Mechanical precision; high-arousal neurofunk with extreme technicality and industrial textures.,Neurofunk
-Culture Shock,7,7,8,9,7,7,7,8,7,3,Refined technical dancefloor; the perfect balance of melodic salience and surgical production.,Dancefloor
+Basstripper,9,6,8,9,2,4,9,3,4,2,9-6-8-9-2-4-9-3-4-2,Jump-Up
+MUZZ,9,5,8,8,7,7,8,6,8,3,9-5-8-8-7-7-8-6-8-3,Dancefloor/Neuro
+Grafix,8,7,9,8,6,6,8,7,7,2,8-7-9-8-6-6-8-7-7-2,Dancefloor/Tech
+Pendulum,9,6,7,9,6,8,7,8,8,4,9-6-7-9-6-8-7-8-8-4,Dancefloor/Rock
+Sigma,6,8,6,9,5,7,6,9,5,4,6-8-6-9-5-7-6-9-5-4,Dancefloor/Pop
+TeeBee,8,4,9,6,9,8,7,4,9,3,8-4-9-6-9-8-7-4-9-3,Neurofunk
+Sub Focus,7,7,8,9,6,7,7,8,6,3,7-7-8-9-6-7-7-8-6-3,Dancefloor
+Kumarion,9,4,8,8,3,5,9,4,5,2,9-4-8-8-3-5-9-4-5-2,Heavy/Trap
+Feint,6,7,7,8,6,6,7,8,6,3,6-7-7-8-6-6-7-8-6-3,Melodic/Liquid
+Rudimental,4,8,5,7,7,8,5,9,7,7,4-8-5-7-7-8-5-9-7-7,Liquid/Soul
+Justin Hawkes,5,5,6,7,7,7,7,6,8,5,5-5-6-7-7-7-7-6-8-5,Experimental
+Goldie,4,4,7,5,8,9,5,3,9,4,4-4-7-5-8-9-5-3-9-4,Jungle
+Hybrid Minds,3,7,4,9,6,8,4,8,5,5,3-7-4-9-6-8-4-8-5-5,Liquid
+Phaeleh,2,6,3,7,7,10,3,6,7,6,2-6-3-7-7-10-3-6-7-6,Ambient/Garage
+Noisia,10,3,10,6,9,9,9,2,10,1,10-3-10-6-9-9-9-2-10-1,Neurofunk
+Metrik,8,7,9,9,7,7,8,8,7,2,8-7-9-9-7-7-8-8-7-2,Dancefloor
+Alix Perez,3,5,5,7,8,8,5,5,8,6,3-5-5-7-8-8-5-5-8-6,Deep/Liquid
+Netsky,5,8,7,9,5,7,6,9,5,3,5-8-7-9-5-7-6-9-5-3,Liquid/Pop
+Chase & Status,7,5,7,8,6,6,7,6,7,5,7-5-7-8-6-6-7-6-7-5,Jungle/Dancefloor
+Bou,9,5,8,9,3,4,9,3,4,2,9-5-8-9-3-4-9-3-4-2,Jump-Up
+Dimension,7,7,8,9,5,7,7,8,6,3,7-7-8-9-5-7-7-8-6-3,Dancefloor
+A.M.C,10,4,9,8,7,6,9,2,8,1,10-4-9-8-7-6-9-2-8-1,Neurofunk
+Hedex,9,5,9,9,3,5,9,3,4,2,9-5-9-9-3-5-9-3-4-2,Jump-Up
+Calibre,2,7,4,8,8,7,4,6,7,6,2-7-4-8-8-7-4-6-7-6,Deep/Liquid
+Bensley,6,5,8,7,8,8,7,7,9,3,6-5-8-7-8-8-7-7-9-3,Experimental/Tech
+S.P.Y,6,4,6,8,6,7,6,5,6,4,6-4-6-8-6-7-6-5-6-4,Liquid/Dark
+Kanine,8,6,8,9,5,6,8,6,6,2,8-6-8-9-5-6-8-6-6-2,Dancefloor
+Wilkinson,6,8,7,9,5,7,6,9,5,4,6-8-7-9-5-7-6-9-5-4,Dancefloor/Pop
+Camo & Krooked,8,6,9,7,9,8,8,7,10,2,8-6-9-7-9-8-8-7-10-2,Dancefloor/Minimal
+Mefjus,10,3,10,6,9,9,9,2,10,1,10-3-10-6-9-9-9-2-10-1,Neurofunk
+Culture Shock,7,7,8,9,7,7,7,8,7,3,7-7-8-9-7-7-7-8-7-3,Dancefloor
