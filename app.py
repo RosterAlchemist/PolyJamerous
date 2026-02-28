@@ -112,12 +112,12 @@ mode = st.session_state['mode']
 
 mc1, mc2 = st.columns(2)
 with mc1:
-    if st.button("🌐 Soundscape", use_container_width=True,
+    if st.button("🌐 Soundscape", width='stretch',
                  type="primary" if mode == 'explore' else "secondary"):
         st.session_state['mode'] = 'explore'
         st.rerun()
 with mc2:
-    if st.button("📊 Compare Artists", use_container_width=True,
+    if st.button("📊 Compare Artists", width='stretch',
                  type="primary" if mode == 'compare' else "secondary"):
         st.session_state['mode'] = 'compare'
         st.rerun()
@@ -263,6 +263,7 @@ if mode == 'explore':
                         x=[centroid[0]], y=[centroid[1]], z=[centroid[2]],
                         mode='markers+text' if show_labels else 'markers',
                         text=[f"C{cluster_id + 1}"] if show_labels else [""],
+                        customdata=[{"type": "diamond", "artists": member_list}],
                         marker=dict(
                             size=20 if is_focused else 15,
                             symbol='diamond',
@@ -302,6 +303,7 @@ if mode == 'explore':
                 x=others[axis_x], y=others[axis_y], z=others[axis_z],
                 mode='markers+text' if show_labels else 'markers',
                 text=others['Artist'] if show_labels else "",
+                customdata=[{"type": "sphere", "artists": [row['Artist']]} for _, row in others.iterrows()],
                 marker=dict(size=7, symbol='circle', color=point_colors, opacity=0.85),
                 textfont=dict(color=text_colors, size=11),
                 textposition="top center",
@@ -318,6 +320,7 @@ if mode == 'explore':
                 x=fa[axis_x], y=fa[axis_y], z=fa[axis_z],
                 mode='markers+text' if show_labels else 'markers',
                 text=fa['Artist'] if show_labels else "",
+                customdata=[{"type": "sphere", "artists": [selected_artist]}],
                 marker=dict(size=14, symbol='circle', color=fa_color, opacity=1.0,
                             line=dict(color='white', width=3)),
                 textfont=dict(color='white', size=14),
@@ -326,14 +329,16 @@ if mode == 'explore':
                 showlegend=False
             ))
 
-        # Collision stars — gold diamond, both names, no click-to-focus
+        # Collision stars — gold diamond, both names, clickable for Compare mode
         for _, group in collisions_df.groupby(pos_cols, sort=False):
             names = " & ".join(group['Artist'].tolist())
             is_focused = selected_artist != "None" and selected_artist in group['Artist'].values
+            collision_artists = group['Artist'].tolist()
             fig.add_trace(go.Scatter3d(
                 x=[group[axis_x].iloc[0]], y=[group[axis_y].iloc[0]], z=[group[axis_z].iloc[0]],
                 mode='markers+text' if show_labels else 'markers',
                 text=[names] if show_labels else [""],
+                customdata=[{"type": "diamond", "artists": collision_artists}],
                 marker=dict(
                     size=15 if is_focused else 12,
                     symbol='diamond',
@@ -393,18 +398,26 @@ if mode == 'explore':
             margin=dict(l=0, r=0, b=0, t=0)
         )
 
-        event = st.plotly_chart(fig, on_select="rerun", selection_mode=["points"],
-                                key="scatter3d", width='stretch')
+        st.plotly_chart(fig, width='stretch', key="scatter3d")
 
-        # Click on a single artist dot → switch to Compare with them in slot 1
-        if event.selection.points:
-            clicked_text = event.selection.points[0].get('text', '')
-            if clicked_text in df['Artist'].values:
-                st.session_state['compare_sel_0'] = clicked_text
-                for _j in range(1, 4):
-                    st.session_state[f'compare_sel_{_j}'] = _PLACEHOLDER
-                st.session_state['mode'] = 'compare'
-                st.rerun()
+        # Interactive section for artist selection using dropdowns
+        st.markdown("---")
+        st.subheader("Or select artists to compare:")
+        compare_cols = st.columns(4)
+        for i, col in enumerate(compare_cols):
+            with col:
+                st.selectbox(f"Artist {i + 1}", 
+                           [_PLACEHOLDER] + sorted(df['Artist'].tolist()),
+                           key=f"temp_select_{i}", 
+                           label_visibility="collapsed")
+        
+        # Button to switch to Compare mode with selected artists
+        if st.button("Compare Selected Artists", width='stretch'):
+            artist_selections = [st.session_state.get(f"temp_select_{i}", _PLACEHOLDER) for i in range(4)]
+            for i, artist in enumerate(artist_selections):
+                st.session_state[f'compare_sel_{i}'] = artist if artist != _PLACEHOLDER and artist in df['Artist'].values else _PLACEHOLDER
+            st.session_state['mode'] = 'compare'
+            st.rerun()
 
 # ============================================================
 # COMPARE MODE
