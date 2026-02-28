@@ -216,17 +216,75 @@ if mode == 'explore':
         f_df['_color'] = f_df.apply(axis_color, axis=1)
 
         # Define cluster colors for visualization
-        if enable_clustering and cluster_strategy == 'Scatter':
-            # Plotly qualitative palette colors
-            CLUSTER_COLORS = [
-                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'
-            ]
+        CLUSTER_COLORS = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'
+        ]
+        if enable_clustering:
             f_df['_cluster_color'] = f_df['_cluster_id'].apply(lambda x: CLUSTER_COLORS[x % len(CLUSTER_COLORS)])
 
         fig = go.Figure()
 
+        # Handle Aggregate clustering: show centroids only
+        if enable_clustering and cluster_strategy == 'Aggregate':
+            # Create cluster summary
+            X = f_df[[axis_x, axis_y, axis_z]].values
+            kmeans_model = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            kmeans_model.fit(X)
+
+            # Build centroid points
+            for cluster_id in range(n_clusters):
+                cluster_mask = f_df['_cluster_id'] == cluster_id
+                cluster_members = f_df[cluster_mask]
+
+                if not cluster_members.empty:
+                    centroid = kmeans_model.cluster_centers_[cluster_id]
+                    member_count = len(cluster_members)
+                    member_list = cluster_members['Artist'].tolist()
+
+                    # Build hover text with member list
+                    member_text = "<br>".join(member_list[:10])
+                    if len(member_list) > 10:
+                        member_text += f"<br>... and {len(member_list) - 10} more"
+
+                    hover_text = (
+                        f"<b>Cluster {cluster_id + 1}</b><br>"
+                        f"Members: {member_count}<br><br>"
+                        f"<i>Artists in cluster:</i><br>"
+                        f"{member_text}"
+                        "<extra></extra>"
+                    )
+
+                    # Check if any cluster member is the focused artist
+                    is_focused = selected_artist != "None" and selected_artist in member_list
+
+                    fig.add_trace(go.Scatter3d(
+                        x=[centroid[0]], y=[centroid[1]], z=[centroid[2]],
+                        mode='markers+text' if show_labels else 'markers',
+                        text=[f"C{cluster_id + 1}"] if show_labels else [""],
+                        marker=dict(
+                            size=20 if is_focused else 15,
+                            symbol='diamond',
+                            color=CLUSTER_COLORS[cluster_id % len(CLUSTER_COLORS)],
+                            opacity=1.0,
+                            line=dict(color='white', width=3 if is_focused else 2)
+                        ),
+                        textfont=dict(color='white', size=12),
+                        textposition="top center",
+                        hovertemplate=[hover_text],
+                        showlegend=False,
+                        name=f"Cluster {cluster_id + 1}"
+                    ))
+        else:
+            # Non-Aggregate mode: show individual points
+            pos_cols = [axis_x, axis_y, axis_z]
+            is_collision = f_df.duplicated(subset=pos_cols, keep=False)
+            singles_df = f_df[~is_collision]
+            collisions_df = f_df[is_collision]
+
+    # If Aggregate mode - skip individual point rendering below
+    if not (enable_clustering and cluster_strategy == 'Aggregate'):
         pos_cols = [axis_x, axis_y, axis_z]
         is_collision = f_df.duplicated(subset=pos_cols, keep=False)
         singles_df = f_df[~is_collision]
