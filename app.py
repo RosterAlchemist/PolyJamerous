@@ -4,11 +4,46 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- 1. DATA LOADING ---
-@st.cache_data
+# Column mapping from DB snake_case to the display names used throughout the app
+_ARTIST_RENAME = {
+    "name": "Artist", "subgenre": "Subgenre", "dna": "DNA",
+    "arousal": "Arousal", "valence": "Valence",
+    "timbral_brightness": "Timbral Brightness",
+    "rhythmic_regularity": "Rhythmic Regularity",
+    "harmonic_complexity": "Harmonic Complexity",
+    "spatial_dimension": "Spatial Dimension",
+    "articulation": "Articulation",
+    "melodic_salience": "Melodic Salience",
+    "structural_entropy": "Structural Entropy",
+    "acousticness": "Acousticness",
+}
+_DIM_RENAME = {
+    "dimension_name": "Dimension", "genre": "Genre",
+    "description": "Description", "metrics": "Metrics",
+    "low_anchor": "Low-End Anchor",
+    "mid_anchor": "Mid-Point Anchor",
+    "high_anchor": "High-End Anchor",
+}
+
+@st.cache_data(ttl=300)
 def load_data():
-    artists = pd.read_csv('artists.csv')
-    anchors = pd.read_csv('dimension_anchors_v2.csv')
-    return artists, anchors
+    try:
+        from supabase import create_client
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        client = create_client(url, key)
+        artists = pd.DataFrame(
+            client.table("artists").select("*").execute().data
+        ).rename(columns=_ARTIST_RENAME)
+        dims = pd.DataFrame(
+            client.table("musical_dimensions").select("*").execute().data
+        ).rename(columns=_DIM_RENAME)
+        return artists, dims
+    except (KeyError, Exception):
+        # Fall back to local CSV files when Supabase is not configured
+        artists = pd.read_csv('artists.csv')
+        dims = pd.read_csv('dimension_anchors_v2.csv')
+        return artists, dims
 
 df, anchors_df = load_data()
 
@@ -58,18 +93,22 @@ if selected_artist != "None":
     dists = np.linalg.norm(f_df[DIMENSIONS].values - anchor, axis=1)
     f_df = f_df[dists <= radius].copy()
 
-# Enhanced Helper for Axis Popovers
+# Helper for Axis Popovers — looks up Universal description then genre anchors
 def get_axis_popover(dim_name, genre):
+    info = f"<b>{dim_name}</b><br>"
     try:
-        row = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == genre)].iloc[0]
-        # Combining Description with Anchors for a rich mouse-over
-        info = f"<b>{dim_name}</b><br><i>{row['Description']}</i><br><br>"
-        info += f"High (10): {row['High-End Anchor']}<br>"
-        info += f"Mid (5): {row['Mid-Point Anchor']}<br>"
-        info += f"Low (1): {row['Low-End Anchor']}"
-        return info
-    except:
-        return f"<b>{dim_name}</b><br>Description pending for this genre."
+        u = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == 'Universal')].iloc[0]
+        info += f"<i>{u['Description']}</i><br><br><b>Metrics:</b> {u['Metrics']}<br><br>"
+    except (IndexError, KeyError):
+        info += "<br>"
+    try:
+        g = anchors_df[(anchors_df['Dimension'] == dim_name) & (anchors_df['Genre'] == genre)].iloc[0]
+        info += f"High (10): {g['High-End Anchor']}<br>"
+        info += f"Mid (5): {g['Mid-Point Anchor']}<br>"
+        info += f"Low (1): {g['Low-End Anchor']}"
+    except (IndexError, KeyError):
+        info += "Genre anchors pending."
+    return info
 
 # --- 5. VISUALIZATION ---
 if not f_df.empty:
