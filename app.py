@@ -53,6 +53,11 @@ with st.sidebar:
 # --- 4. DATA PROCESSING ---
 f_df = df[df['Subgenre'].isin(selected_subs)].copy()
 
+if selected_artist != "None":
+    anchor = df.loc[df['Artist'] == selected_artist, DIMENSIONS].values[0]
+    dists = np.linalg.norm(f_df[DIMENSIONS].values - anchor, axis=1)
+    f_df = f_df[dists <= radius].copy()
+
 # Enhanced Helper for Axis Popovers
 def get_axis_popover(dim_name, genre):
     try:
@@ -68,28 +73,46 @@ def get_axis_popover(dim_name, genre):
 
 # --- 5. VISUALIZATION ---
 if not f_df.empty:
-    hover_texts = []
-    for _, row in f_df.iterrows():
-        # Artist Narrative + Full Dimension Rankings
+    def build_hover(row):
         txt = f"<b>{row['Artist']}</b><br><i>{row['DNA']}</i><br><br>"
         for d in DIMENSIONS:
             txt += f"<b>{d}:</b> {row[d]}<br>"
-        txt += "<extra></extra>"
-        hover_texts.append(txt)
+        return txt + "<extra></extra>"
 
     fig = go.Figure()
 
-    # Spherical Artist Points
-    fig.add_trace(go.Scatter3d(
-        x=f_df[axis_x], y=f_df[axis_y], z=f_df[axis_z],
-        mode='markers+text',
-        text=f_df['Artist'],
-        marker=dict(size=7, symbol='circle', color=f_df['Subgenre'].map(subgenre_colors).fillna('#FFF'), opacity=0.9),
-        textfont=dict(color=f_df['Subgenre'].map(subgenre_colors).tolist(), size=11),
-        textposition="top center",
-        hovertemplate=hover_texts,
-        showlegend=False
-    ))
+    # Background artist points (neighbours / all artists)
+    others = f_df[f_df['Artist'] != selected_artist] if selected_artist != "None" else f_df
+    if not others.empty:
+        fig.add_trace(go.Scatter3d(
+            x=others[axis_x], y=others[axis_y], z=others[axis_z],
+            mode='markers+text',
+            text=others['Artist'],
+            marker=dict(size=7, symbol='circle', color=others['Subgenre'].map(subgenre_colors).fillna('#FFF'), opacity=0.75),
+            textfont=dict(color=others['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist(), size=11),
+            textposition="top center",
+            hovertemplate=[build_hover(r) for _, r in others.iterrows()],
+            showlegend=False
+        ))
+
+    # Focused artist — rendered last so it sits on top
+    if selected_artist != "None" and selected_artist in f_df['Artist'].values:
+        fa = f_df[f_df['Artist'] == selected_artist].iloc[[0]]
+        fa_color = subgenre_colors.get(fa['Subgenre'].iloc[0], '#FFFFFF')
+        fig.add_trace(go.Scatter3d(
+            x=fa[axis_x], y=fa[axis_y], z=fa[axis_z],
+            mode='markers+text',
+            text=fa['Artist'],
+            marker=dict(
+                size=14, symbol='circle',
+                color=fa_color, opacity=1.0,
+                line=dict(color='white', width=3)
+            ),
+            textfont=dict(color='white', size=14),
+            textposition="top center",
+            hovertemplate=[build_hover(fa.iloc[0])],
+            showlegend=False
+        ))
 
     # Grid & Axes Frame (Logic from previous versions)
     grid_style = dict(color="rgba(150, 150, 150, 0.1)", width=1)
