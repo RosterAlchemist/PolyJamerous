@@ -160,8 +160,8 @@ if mode == 'explore':
             cluster_strategy = None
 
     ax_col1, ax_col2, ax_col3 = st.columns(3)
-    with ax_col1: axis_x = st.selectbox("X-Axis", DIMENSIONS, index=1)
-    with ax_col2: axis_y = st.selectbox("Y-Axis", DIMENSIONS, index=7)
+    with ax_col1: axis_x = st.selectbox("X-Axis", DIMENSIONS, index=7)
+    with ax_col2: axis_y = st.selectbox("Y-Axis", DIMENSIONS, index=1)
     with ax_col3: axis_z = st.selectbox("Z-Axis", DIMENSIONS, index=0)
 
     f_df = df[df['genre'] == parent_genre].copy()
