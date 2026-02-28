@@ -78,9 +78,9 @@ with st.sidebar:
 
 # --- AXIS SELECTORS (above chart) ---
 ax_col1, ax_col2, ax_col3 = st.columns(3)
-with ax_col1: axis_x = st.selectbox("X-Axis", DIMENSIONS, index=0)
-with ax_col2: axis_y = st.selectbox("Y-Axis", DIMENSIONS, index=4)
-with ax_col3: axis_z = st.selectbox("Z-Axis", DIMENSIONS, index=5)
+with ax_col1: axis_x = st.selectbox("X-Axis", DIMENSIONS, index=1)
+with ax_col2: axis_y = st.selectbox("Y-Axis", DIMENSIONS, index=3)
+with ax_col3: axis_z = st.selectbox("Z-Axis", DIMENSIONS, index=0)
 
 # --- 4. DATA PROCESSING ---
 f_df = df[df['genre'] == parent_genre].copy()
@@ -132,6 +132,15 @@ if not f_df.empty:
             "<extra></extra>"
         )
 
+    def axis_color(row):
+        """Map the three active axis scores (1-10) to RGB channels (80-255).
+        The dot color encodes all three visible dimensions as a 4th visual layer."""
+        def ch(v): return int((v - 1) / 9 * 175 + 80)
+        return f"rgb({ch(row[axis_x])},{ch(row[axis_y])},{ch(row[axis_z])})"
+
+    f_df = f_df.copy()
+    f_df['_color'] = f_df.apply(axis_color, axis=1)
+
     fig = go.Figure()
 
     # Background artist points
@@ -141,8 +150,8 @@ if not f_df.empty:
             x=others[axis_x], y=others[axis_y], z=others[axis_z],
             mode='markers+text',
             text=others['Artist'],
-            marker=dict(size=7, symbol='circle', color=others['Subgenre'].map(subgenre_colors).fillna('#FFF'), opacity=0.75),
-            textfont=dict(color=others['Subgenre'].map(subgenre_colors).fillna('#FFFFFF').tolist(), size=11),
+            marker=dict(size=7, symbol='circle', color=others['_color'].tolist(), opacity=0.85),
+            textfont=dict(color=others['_color'].tolist(), size=11),
             textposition="top center",
             hovertemplate=[build_hover(r) for _, r in others.iterrows()],
             showlegend=False
@@ -151,7 +160,7 @@ if not f_df.empty:
     # Focused artist — rendered last so it sits on top
     if selected_artist != "None" and selected_artist in f_df['Artist'].values:
         fa = f_df[f_df['Artist'] == selected_artist].iloc[[0]]
-        fa_color = subgenre_colors.get(fa['Subgenre'].iloc[0], '#FFFFFF')
+        fa_color = fa['_color'].iloc[0]
         fig.add_trace(go.Scatter3d(
             x=fa[axis_x], y=fa[axis_y], z=fa[axis_z],
             mode='markers+text',
