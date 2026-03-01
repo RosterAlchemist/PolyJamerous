@@ -112,12 +112,12 @@ mode = st.session_state['mode']
 
 mc1, mc2 = st.columns(2)
 with mc1:
-    if st.button("🌐 Soundscape", width='stretch',
+    if st.button("🌐 Soundscape", use_container_width=True,
                  type="primary" if mode == 'explore' else "secondary"):
         st.session_state['mode'] = 'explore'
         st.rerun()
 with mc2:
-    if st.button("📊 Compare Artists", width='stretch',
+    if st.button("📊 Compare Artists", use_container_width=True,
                  type="primary" if mode == 'compare' else "secondary"):
         st.session_state['mode'] = 'compare'
         st.rerun()
@@ -398,7 +398,17 @@ if mode == 'explore':
             margin=dict(l=0, r=0, b=0, t=0)
         )
 
-        st.plotly_chart(fig, width='stretch', key="scatter3d")
+        event = st.plotly_chart(fig, on_select="rerun", selection_mode=["points"],
+                                key="scatter3d", width='stretch')
+
+        if event and event.selection and event.selection.points:
+            clicked_text = event.selection.points[0].get('text', '')
+            if clicked_text and clicked_text in df['Artist'].values:
+                st.session_state['compare_sel_0'] = clicked_text
+                for _j in range(1, 4):
+                    st.session_state[f'compare_sel_{_j}'] = _PLACEHOLDER
+                st.session_state['mode'] = 'compare'
+                st.rerun()
 
         # Interactive section for artist selection using dropdowns
         st.markdown("---")
@@ -412,7 +422,7 @@ if mode == 'explore':
                            label_visibility="collapsed")
         
         # Button to switch to Compare mode with selected artists
-        if st.button("Compare Selected Artists", width='stretch'):
+        if st.button("Compare Selected Artists", use_container_width=True):
             artist_selections = [st.session_state.get(f"temp_select_{i}", _PLACEHOLDER) for i in range(4)]
             for i, artist in enumerate(artist_selections):
                 st.session_state[f'compare_sel_{i}'] = artist if artist != _PLACEHOLDER and artist in df['Artist'].values else _PLACEHOLDER
