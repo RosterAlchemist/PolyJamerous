@@ -1,4 +1,5 @@
 import textwrap
+from collections import Counter
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +8,7 @@ from sklearn.cluster import KMeans
 
 # --- 1. DATA LOADING ---
 _ARTIST_RENAME = {
-    "name": "Artist", "subgenre": "Subgenre", "dna": "DNA",
+    "name": "Artist", "subgenres": "Subgenres", "dna": "DNA",
     "arousal": "Arousal", "valence": "Valence",
     "timbral_brightness": "Timbral Brightness",
     "rhythmic_regularity": "Rhythmic Regularity",
@@ -59,14 +60,68 @@ GENRES = [
 COMPARE_COLORS = ['#00D4FF', '#FF4B4B', '#32CD32', '#FFB400']
 _PLACEHOLDER = "Select Artist"
 
+DIM_ABBREV = {
+    "Arousal":             "Arousal",
+    "Valence":             "Valence",
+    "Timbral Brightness":  "Brightness",
+    "Rhythmic Regularity": "Rhythm",
+    "Harmonic Complexity": "Harmony",
+    "Spatial Dimension":   "Spatial",
+    "Articulation":        "Articulation",
+    "Melodic Salience":    "Melody",
+    "Structural Entropy":  "Entropy",
+    "Acousticness":        "Acoustic",
+}
+
+# Canonical DnB subgenre taxonomy (per reddit.com/r/DnB guide)
+# Top-level subgenres and their sub-subgenres
+CANONICAL_SUBGENRES = {
+    'Jungle':      ['Atmospheric Jungle', 'Ragga Jungle', 'Drumfunk', 'Breakcore'],
+    'Dancefloor':  [],
+    'Liquid':      [],
+    'Neurofunk':   ['Techstep', 'Technoid'],
+    'Jump Up':     [],
+    'Crossbreed':  ['Darkstep'],
+    'Deep':        [],
+    'Halftime':    ['Leftfield Bass', '170', 'Autonomic'],
+    'Drumstep':    [],
+    'Sambass':     [],
+    'Ragga DnB':   [],
+}
+
 subgenre_colors = {
-    'Jump-Up': '#FF4B4B', 'Dancefloor/Neuro': '#00D4FF', 'Dancefloor/Tech': '#7D4BFF',
-    'Dancefloor/Rock': '#FFB400', 'Dancefloor/Pop': '#FF69B4', 'Neurofunk': '#32CD32',
-    'Dancefloor': '#1E90FF', 'Heavy/Trap': '#8B0000', 'Melodic/Liquid': '#00FA9A',
-    'Liquid/Soul': '#FFD700', 'Experimental': '#C0C0C0', 'Jungle': '#8B4513',
-    'Liquid': '#87CEEB', 'Ambient/Garage': '#4B0082', 'Deep/Liquid': '#2F4F4F',
-    'Experimental/Tech': '#ADFF2F', 'Liquid/Dark': '#483D8B', 'Dancefloor/Minimal': '#708090',
-    'Jungle/Dancefloor': '#D2691E',
+    # Jungle family — earth tones
+    'Jungle':             '#8B4513',
+    'Atmospheric Jungle': '#A0522D',
+    'Ragga Jungle':       '#6B8E23',
+    'Drumfunk':           '#CD853F',
+    'Breakcore':          '#DEB887',
+    # Dancefloor — bright blue
+    'Dancefloor':         '#1E90FF',
+    # Liquid — soft teal
+    'Liquid':             '#87CEEB',
+    # Neurofunk family — greens
+    'Neurofunk':          '#32CD32',
+    'Techstep':           '#228B22',
+    'Technoid':           '#006400',
+    # Jump Up — red
+    'Jump Up':            '#FF4B4B',
+    # Crossbreed family — dark red
+    'Crossbreed':         '#8B0000',
+    'Darkstep':           '#DC143C',
+    # Deep — dark slate
+    'Deep':               '#2F4F4F',
+    # Halftime family — purples
+    'Halftime':           '#4B0082',
+    'Leftfield Bass':     '#6A0DAD',
+    '170':                '#7B68EE',
+    'Autonomic':          '#483D8B',
+    # Drumstep — gray
+    'Drumstep':           '#708090',
+    # Sambass — gold
+    'Sambass':            '#DAA520',
+    # Ragga DnB — olive
+    'Ragga DnB':          '#556B2F',
 }
 
 # --- 2. HELPERS ---
@@ -97,6 +152,14 @@ def _field(row, col):
     val = row.get(col, '')
     return '' if pd.isna(val) else str(val)
 
+def _ensure_list(val):
+    """Normalise a subgenres value to a Python list (handles arrays from Supabase and strings from CSV)."""
+    if isinstance(val, list):
+        return val
+    if val and not (isinstance(val, float) and pd.isna(val)):
+        return [str(val)]
+    return []
+
 # --- 3. SESSION STATE ---
 if 'mode' not in st.session_state:
     st.session_state['mode'] = 'explore'
@@ -105,6 +168,16 @@ if 'artist_select' not in st.session_state:
 for _i in range(4):
     if f'compare_sel_{_i}' not in st.session_state:
         st.session_state[f'compare_sel_{_i}'] = _PLACEHOLDER
+
+# Search and cluster expansion state
+if 'search_artist' not in st.session_state:
+    st.session_state['search_artist'] = None
+if 'expanded_cluster_ids' not in st.session_state:
+    st.session_state['expanded_cluster_ids'] = set()
+if 'cluster_cache' not in st.session_state:
+    st.session_state['cluster_cache'] = {}
+if 'last_axes' not in st.session_state:
+    st.session_state['last_axes'] = None
 
 # --- 4. HEADER & MODE TOGGLE ---
 st.title("🔊 PolyJamerous")
@@ -130,34 +203,39 @@ st.markdown("---")
 if mode == 'explore':
 
     with st.sidebar:
+        # ========== SEARCH & DISCOVERY (PRIMARY) ==========
+        st.subheader("Search Artist")
+        search_input = st.selectbox(
+            "Find an artist in this genre:",
+            ["None"] + sorted(df['Artist'].tolist()),
+            label_visibility="collapsed",
+            key="search_artist_select"
+        )
+
+        # Detect search change and update state
+        if search_input != "None" and search_input != st.session_state.get('search_artist'):
+            st.session_state['search_artist'] = search_input
+            st.rerun()
+        elif search_input == "None" and st.session_state.get('search_artist') is not None:
+            st.session_state['search_artist'] = None
+            st.session_state['expanded_cluster_ids'].clear()
+            st.rerun()
+
+        # ========== GENRE FOCUS (SECONDARY) ==========
+        st.markdown("---")
         st.subheader("Genre Focus")
         parent_genre = st.radio("Genre", options=GENRES, index=2, label_visibility="collapsed")
 
-        st.markdown("---")
-        st.subheader("Focus Artist")
-        selected_artist = st.selectbox(
-            "Artist", ["None"] + sorted(df['Artist'].tolist()),
-            label_visibility="collapsed", key="artist_select"
-        )
-        st.caption("Click an artist dot to open Compare.")
-
-        st.markdown("---")
-        st.subheader("Subgenres")
-        st.caption("Subgenre filtering coming soon.")
-
-        st.markdown("---")
-        st.subheader("Display Options")
-        show_labels = st.checkbox("Show Artist Labels", value=True)
-
+        # ========== CLUSTERING (ALWAYS ENABLED) ==========
         st.markdown("---")
         st.subheader("Clustering")
-        enable_clustering = st.checkbox("Enable K-Means Clustering", value=False)
-        if enable_clustering:
-            n_clusters = st.slider("Number of Clusters", 2, 15, 5)
-            cluster_strategy = st.radio("Strategy", ["Aggregate", "Scatter"], label_visibility="collapsed")
-        else:
-            n_clusters = None
-            cluster_strategy = None
+        n_clusters = st.radio("Number of Clusters", [25, 50], horizontal=True)
+        clustering_enabled = True
+        cluster_strategy = "Aggregate"
+
+        # Cluster count shown dynamically below (after clustering runs)
+
+    show_labels = True  # labels always on (checkbox removed)
 
     ax_col1, ax_col2, ax_col3 = st.columns(3)
     with ax_col1: axis_x = st.selectbox("X-Axis", DIMENSIONS, index=7)
@@ -166,12 +244,100 @@ if mode == 'explore':
 
     f_df = df[df['genre'] == parent_genre].copy()
 
-    # Prepare for clustering if enabled
-    if enable_clustering and n_clusters is not None:
+    # Always perform clustering with caching
+    cache_key = f"{parent_genre}_{n_clusters}_{axis_x}_{axis_y}_{axis_z}"
+
+    if cache_key not in st.session_state['cluster_cache']:
         X = f_df[[axis_x, axis_y, axis_z]].values
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        f_df['_cluster_id'] = kmeans.fit_predict(X)
-        f_df['_cluster_center'] = False
+        cluster_ids = kmeans.fit_predict(X)
+        f_df['_cluster_id'] = cluster_ids
+
+        # Build cluster membership map
+        global_means = f_df[DIMENSIONS].mean()
+        cluster_members_map = {}
+        for cid in range(n_clusters):
+            members = f_df[f_df['_cluster_id'] == cid]
+            centroid = kmeans.cluster_centers_[cid]
+
+            # Outlier dimension: which of the 10 dimensions deviates most from the global mean
+            cluster_means = members[DIMENSIONS].mean()
+            deviations = (cluster_means - global_means).abs()
+            outlier_dim = deviations.idxmax()
+            outlier_dir = "High" if cluster_means[outlier_dim] > global_means[outlier_dim] else "Low"
+            outlier_label = f"{outlier_dir} {DIM_ABBREV[outlier_dim]}"
+
+            # Centroid artist: member closest to the KMeans centroid on the 3 selected axes
+            dists = np.sqrt(
+                (members[axis_x] - centroid[0]) ** 2 +
+                (members[axis_y] - centroid[1]) ** 2 +
+                (members[axis_z] - centroid[2]) ** 2
+            )
+            centroid_artist = members.loc[dists.idxmin(), 'Artist']
+
+            # Explode the subgenres array so each subgenre counts individually
+            all_sg = [sg for val in members['Subgenres'] for sg in _ensure_list(val)]
+            sg_counts = Counter(all_sg)
+            cluster_members_map[cid] = {
+                'artists': members['Artist'].tolist(),
+                'centroid': centroid,
+                'count': len(members),
+                'subgenre_counts': dict(sg_counts),
+                'dominant_subgenre': sg_counts.most_common(1)[0][0] if sg_counts else 'Mixed',
+                'outlier_label': outlier_label,
+                'centroid_artist': centroid_artist,
+            }
+
+        # Cache results
+        st.session_state['cluster_cache'][cache_key] = {
+            'kmeans': kmeans,
+            'cluster_ids': cluster_ids,
+            'cluster_members': cluster_members_map
+        }
+    else:
+        # Use cached results
+        cached = st.session_state['cluster_cache'][cache_key]
+        f_df['_cluster_id'] = cached['cluster_ids']
+
+    # Detect axis change and clear cache if needed
+    current_axes = (axis_x, axis_y, axis_z)
+    if st.session_state['last_axes'] != current_axes:
+        st.session_state['cluster_cache'].clear()
+        st.session_state['last_axes'] = current_axes
+        st.rerun()
+
+    # Determine searched artist's cluster
+    searched_artist = st.session_state.get('search_artist')
+    searched_cluster_id = None
+    if searched_artist and searched_artist != "None":
+        search_row = f_df[f_df['Artist'] == searched_artist]
+        if not search_row.empty:
+            searched_cluster_id = int(search_row.iloc[0]['_cluster_id'])
+        else:
+            st.warning(f"'{searched_artist}' not in {parent_genre} genre")
+            st.session_state['search_artist'] = None
+            searched_artist = None
+
+    # Sidebar: interactive cluster expansion checkboxes
+    _cluster_data = st.session_state['cluster_cache'].get(cache_key, {})
+    _cluster_members = _cluster_data.get('cluster_members', {})
+    expanded_ids = set()
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("Clusters")
+        st.caption(f"{len(f_df)} artists · {n_clusters} clusters · check to expand")
+        for _cid in range(n_clusters):
+            _cb_key = f"cluster_cb_{_cid}_{cache_key}"
+            _m = _cluster_members.get(_cid, {'artists': [], 'count': 0})
+            _outlier = _m.get('outlier_label', '—')
+            _anchor  = _m.get('centroid_artist', '?')
+            _label = f"Vibe {_cid+1} ({_m['count']}) ~ {_anchor}"
+            # Auto-expand the cluster containing the searched artist
+            if _cid == searched_cluster_id and searched_artist:
+                if not st.session_state.get(_cb_key, False):
+                    st.session_state[_cb_key] = True
+            if st.checkbox(_label, key=_cb_key):
+                expanded_ids.add(_cid)
 
     if not f_df.empty:
         DIM_SHORT = [
@@ -221,136 +387,122 @@ if mode == 'explore':
             '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
             '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'
         ]
-        if enable_clustering:
-            f_df['_cluster_color'] = f_df['_cluster_id'].apply(lambda x: CLUSTER_COLORS[x % len(CLUSTER_COLORS)])
 
         fig = go.Figure()
 
-        # Handle Aggregate clustering: show centroids only
-        if enable_clustering and cluster_strategy == 'Aggregate':
-            # Create cluster summary
-            X = f_df[[axis_x, axis_y, axis_z]].values
-            kmeans_model = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-            kmeans_model.fit(X)
+        # Get cached clustering data
+        cached = st.session_state['cluster_cache'][cache_key]
+        kmeans_model = cached['kmeans']
+        cluster_members_map = cached['cluster_members']
+        # expanded_ids and searched_artist come from the sidebar controls above
 
-            # Build centroid points
-            for cluster_id in range(n_clusters):
-                cluster_mask = f_df['_cluster_id'] == cluster_id
-                cluster_members = f_df[cluster_mask]
+        # Build visualization with support for expandable clusters
+        for cluster_id in range(n_clusters):
+            centroid = kmeans_model.cluster_centers_[cluster_id]
+            member_data = cluster_members_map[cluster_id]
+            members_df = f_df[f_df['_cluster_id'] == cluster_id]
 
-                if not cluster_members.empty:
-                    centroid = kmeans_model.cluster_centers_[cluster_id]
-                    member_count = len(cluster_members)
-                    member_list = cluster_members['Artist'].tolist()
+            is_searched = searched_artist != "None" and searched_artist in member_data['artists'] if searched_artist else False
+            is_expanded = cluster_id in expanded_ids
 
-                    # Build hover text with member list
-                    member_text = "<br>".join(member_list[:10])
-                    if len(member_list) > 10:
-                        member_text += f"<br>... and {len(member_list) - 10} more"
+            # ===== CLUSTER CENTROID (always shown) =====
+            size = 25 if is_searched else (18 if is_expanded else 12)
+            opacity = 1.0 if (is_expanded or is_searched) else 0.5
+            border_width = 4 if is_searched else (2 if is_expanded else 1)
+            border_color = 'white' if is_searched else 'gray'
 
-                    hover_text = (
-                        f"<b>Cluster {cluster_id + 1}</b><br>"
-                        f"Members: {member_count}<br><br>"
-                        f"<i>Artists in cluster:</i><br>"
-                        f"{member_text}"
-                        "<extra></extra>"
-                    )
+            # Hover text with outlier label, centroid artist, subgenre mix, member preview
+            _outlier_label   = member_data.get('outlier_label', '')
+            _centroid_artist = member_data.get('centroid_artist', '')
+            _sg_lines = "<br>".join(
+                f"  {sg}: {cnt}" for sg, cnt in list(member_data.get('subgenre_counts', {}).items())[:5]
+            )
+            member_preview = "<br>".join(member_data['artists'][:8])
+            if len(member_data['artists']) > 8:
+                member_preview += f"<br>... +{len(member_data['artists'])-8} more"
 
-                    # Check if any cluster member is the focused artist
-                    is_focused = selected_artist != "None" and selected_artist in member_list
+            hover_centroid = (
+                f"<b>Vibe {cluster_id+1}</b><br>"
+                f"{member_data['count']} artists ~ {_centroid_artist}<br><br>"
+                f"<i>Subgenre mix:</i><br>{_sg_lines}<br><br>"
+                f"{member_preview}"
+                "<extra></extra>"
+            )
+
+            fig.add_trace(go.Scatter3d(
+                x=[centroid[0]], y=[centroid[1]], z=[centroid[2]],
+                mode='markers+text' if show_labels and (is_expanded or is_searched) else 'markers',
+                text=[f"Vibe {cluster_id+1}"] if show_labels and (is_expanded or is_searched) else [""],
+                customdata=[{"type": "cluster", "cluster_id": cluster_id, "is_centroid": True}],
+                marker=dict(
+                    size=size,
+                    symbol='diamond',
+                    color=CLUSTER_COLORS[cluster_id % len(CLUSTER_COLORS)],
+                    opacity=opacity,
+                    line=dict(color=border_color, width=border_width)
+                ),
+                textfont=dict(color='white', size=12),
+                textposition="top center",
+                hovertemplate=[hover_centroid],
+                showlegend=False,
+                name=f"Cluster {cluster_id + 1}"
+            ))
+
+            # ===== CLUSTER MEMBERS (only if expanded or searched) =====
+            if is_expanded or is_searched:
+                pos_cols = [axis_x, axis_y, axis_z]
+                is_collision = members_df.duplicated(subset=pos_cols, keep=False)
+                singles_df = members_df[~is_collision]
+                collisions_df = members_df[is_collision]
+
+                # Individual artist spheres
+                if not singles_df.empty:
+                    cluster_color = CLUSTER_COLORS[cluster_id % len(CLUSTER_COLORS)]
+                    colors = [cluster_color] * len(singles_df)
 
                     fig.add_trace(go.Scatter3d(
-                        x=[centroid[0]], y=[centroid[1]], z=[centroid[2]],
+                        x=singles_df[axis_x],
+                        y=singles_df[axis_y],
+                        z=singles_df[axis_z],
                         mode='markers+text' if show_labels else 'markers',
-                        text=[f"C{cluster_id + 1}"] if show_labels else [""],
-                        customdata=[{"type": "diamond", "artists": member_list}],
+                        text=singles_df['Artist'] if show_labels else "",
+                        customdata=[{"type": "artist", "cluster_id": cluster_id} for _ in singles_df.iterrows()],
                         marker=dict(
-                            size=20 if is_focused else 15,
-                            symbol='diamond',
-                            color=CLUSTER_COLORS[cluster_id % len(CLUSTER_COLORS)],
-                            opacity=1.0,
-                            line=dict(color='white', width=3 if is_focused else 2)
+                            size=8,
+                            symbol='circle',
+                            color=colors,
+                            opacity=0.9,
+                            line=dict(color='white', width=1)
                         ),
-                        textfont=dict(color='white', size=12),
+                        textfont=dict(color='white', size=10),
                         textposition="top center",
-                        hovertemplate=[hover_text],
-                        showlegend=False,
-                        name=f"Cluster {cluster_id + 1}"
+                        hovertemplate=[build_hover(row) for _, row in singles_df.iterrows()],
+                        showlegend=False
                     ))
-        else:
-            # Non-Aggregate mode: show individual points
-            pos_cols = [axis_x, axis_y, axis_z]
-            is_collision = f_df.duplicated(subset=pos_cols, keep=False)
-            singles_df = f_df[~is_collision]
-            collisions_df = f_df[is_collision]
 
-    # If Aggregate mode - skip individual point rendering below
-    if not (enable_clustering and cluster_strategy == 'Aggregate'):
-        pos_cols = [axis_x, axis_y, axis_z]
-        is_collision = f_df.duplicated(subset=pos_cols, keep=False)
-        singles_df = f_df[~is_collision]
-        collisions_df = f_df[is_collision]
+                # Collision points (multiple artists at same position)
+                for _, group in collisions_df.groupby(pos_cols, sort=False):
+                    collision_names = " & ".join(group['Artist'].tolist())
 
-        # Background single points
-        others = singles_df[singles_df['Artist'] != selected_artist] if selected_artist != "None" else singles_df
-        if not others.empty:
-            # Determine colors based on clustering strategy
-            use_cluster_colors = enable_clustering and cluster_strategy == 'Scatter'
-            point_colors = others['_cluster_color'].tolist() if use_cluster_colors else others['_color'].tolist()
-            text_colors = point_colors if use_cluster_colors else others['_color'].tolist()
-
-            fig.add_trace(go.Scatter3d(
-                x=others[axis_x], y=others[axis_y], z=others[axis_z],
-                mode='markers+text' if show_labels else 'markers',
-                text=others['Artist'] if show_labels else "",
-                customdata=[{"type": "sphere", "artists": [row['Artist']]} for _, row in others.iterrows()],
-                marker=dict(size=7, symbol='circle', color=point_colors, opacity=0.85),
-                textfont=dict(color=text_colors, size=11),
-                textposition="top center",
-                hovertemplate=[build_hover(r) for _, r in others.iterrows()],
-                showlegend=False
-            ))
-
-        # Focused single artist
-        if selected_artist != "None" and selected_artist in singles_df['Artist'].values:
-            fa = singles_df[singles_df['Artist'] == selected_artist].iloc[[0]]
-            use_cluster_colors = enable_clustering and cluster_strategy == 'Scatter'
-            fa_color = fa['_cluster_color'].iloc[0] if use_cluster_colors else fa['_color'].iloc[0]
-            fig.add_trace(go.Scatter3d(
-                x=fa[axis_x], y=fa[axis_y], z=fa[axis_z],
-                mode='markers+text' if show_labels else 'markers',
-                text=fa['Artist'] if show_labels else "",
-                customdata=[{"type": "sphere", "artists": [selected_artist]}],
-                marker=dict(size=14, symbol='circle', color=fa_color, opacity=1.0,
-                            line=dict(color='white', width=3)),
-                textfont=dict(color='white', size=14),
-                textposition="top center",
-                hovertemplate=[build_hover(fa.iloc[0])],
-                showlegend=False
-            ))
-
-        # Collision stars — gold diamond, both names, clickable for Compare mode
-        for _, group in collisions_df.groupby(pos_cols, sort=False):
-            names = " & ".join(group['Artist'].tolist())
-            is_focused = selected_artist != "None" and selected_artist in group['Artist'].values
-            collision_artists = group['Artist'].tolist()
-            fig.add_trace(go.Scatter3d(
-                x=[group[axis_x].iloc[0]], y=[group[axis_y].iloc[0]], z=[group[axis_z].iloc[0]],
-                mode='markers+text' if show_labels else 'markers',
-                text=[names] if show_labels else [""],
-                customdata=[{"type": "diamond", "artists": collision_artists}],
-                marker=dict(
-                    size=15 if is_focused else 12,
-                    symbol='diamond',
-                    color='#FFD700',
-                    opacity=1.0,
-                    line=dict(color='white', width=3 if is_focused else 1)
-                ),
-                textfont=dict(color='#FFD700', size=13 if is_focused else 11),
-                textposition="top center",
-                hovertemplate=[build_collision_hover(group)],
-                showlegend=False
-            ))
+                    fig.add_trace(go.Scatter3d(
+                        x=[group[axis_x].iloc[0]],
+                        y=[group[axis_y].iloc[0]],
+                        z=[group[axis_z].iloc[0]],
+                        mode='markers+text' if show_labels else 'markers',
+                        text=[collision_names] if show_labels else [""],
+                        customdata=[{"type": "collision", "cluster_id": cluster_id}],
+                        marker=dict(
+                            size=10,
+                            symbol='diamond',
+                            color='#FFD700',
+                            opacity=0.95,
+                            line=dict(color='white', width=2)
+                        ),
+                        textfont=dict(color='#FFD700', size=11),
+                        textposition="top center",
+                        hovertemplate=[build_collision_hover(group)],
+                        showlegend=False
+                    ))
 
         # Grid lines
         grid_style = dict(color="rgba(150, 150, 150, 0.1)", width=1)
@@ -398,17 +550,8 @@ if mode == 'explore':
             margin=dict(l=0, r=0, b=0, t=0)
         )
 
-        event = st.plotly_chart(fig, on_select="rerun", selection_mode=["points"],
-                                key="scatter3d", width='stretch')
+        st.plotly_chart(fig, key="scatter3d", width='stretch')
 
-        if event and event.selection and event.selection.points:
-            clicked_text = event.selection.points[0].get('text', '')
-            if clicked_text and clicked_text in df['Artist'].values:
-                st.session_state['compare_sel_0'] = clicked_text
-                for _j in range(1, 4):
-                    st.session_state[f'compare_sel_{_j}'] = _PLACEHOLDER
-                st.session_state['mode'] = 'compare'
-                st.rerun()
 
         # Interactive section for artist selection using dropdowns
         st.markdown("---")
@@ -492,9 +635,9 @@ elif mode == 'compare':
                     f"<span style='color:{color};font-size:1.1em;font-weight:bold'>{name}</span>",
                     unsafe_allow_html=True,
                 )
-                subgenre = _field(row, 'Subgenre')
-                if subgenre:
-                    st.caption(subgenre)
+                sg_list = _ensure_list(row.get('Subgenres', []))
+                if sg_list:
+                    st.caption(" · ".join(sg_list))
                 dna = _field(row, 'DNA')
                 if dna:
                     st.markdown(f"*{dna}*")
